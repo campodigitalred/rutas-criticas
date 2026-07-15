@@ -1,0 +1,15 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+# Cálculo / validación de grafos
+networkx==3.4.2
+numpy==2.2.1
+# Pruebas
+pytest==8.3.4
+httpx==0.28.1
+# Producción (persistencia, async, exportación) — referencia
+# sqlalchemy==2.0.36
+# psycopg[binary]==3.2.3
+# celery[redis]==5.4.0
+# openpyxl==3.1.5      # export XLSX
+# reportlab==4.2.5     # export PDF

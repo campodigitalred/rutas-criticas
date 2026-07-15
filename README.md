@@ -1,0 +1,85 @@
+# Campo Crítico
+
+> Plataforma web y móvil de **Agencia Campo Digital** que transforma ideas y proyectos
+> (agro, desarrollo rural, transformación digital) en **Rutas Críticas** (CPM/PERT)
+> visuales, automatizadas e inteligentes.
+
+Convierte una idea preliminar o un proyecto estructurado en un mapa de ruta exacto con
+tiempos, dependencias, cuellos de botella y asignación de recursos — con soporte offline
+para técnicos en zonas rurales sin señal.
+
+---
+
+## Módulos
+
+| # | Módulo | Estado en este repo |
+|---|---|---|
+| A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | Especificado + endpoints |
+| B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
+| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Prototipo React (Red + Gantt) |
+| D | Recursos y simulación "¿Qué pasaría si…?" | Endpoint + esquema |
+| E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
+
+## Estructura
+
+```
+rutas-criticas/
+├── docs/
+│   ├── ARCHITECTURE.md   # Especificación completa (módulos, stack, diseño, offline)
+│   ├── DATA_MODEL.md     # Modelo entidad-relación (Mermaid + notas)
+│   └── API.md            # Endpoints REST
+├── db/
+│   └── schema.sql        # Esquema PostgreSQL
+├── backend/              # FastAPI + motor CPM/PERT (Python)
+│   ├── app/cpm/engine.py # Núcleo del algoritmo
+│   ├── app/main.py       # API
+│   └── tests/            # 10 pruebas del motor (pytest)
+└── frontend/             # Prototipo React (Vite)
+    └── src/
+        ├── lib/cpm.js                       # Motor CPM/PERT en JS (offline/tiempo real)
+        └── components/CriticalPathView.jsx  # Vista de Ruta Crítica (Red PERT + Gantt)
+```
+
+## El motor CPM/PERT (núcleo)
+
+Implementado **dos veces con paridad de resultados**: en Python (`backend/app/cpm/engine.py`)
+para el servidor y en JavaScript (`frontend/src/lib/cpm.js`) para el recálculo en tiempo real
+y el modo offline. Ambos calculan:
+
+- Tiempos tempranos (ES/EF) y tardíos (LS/LF) — pases hacia adelante y atrás.
+- Holgura total y holgura libre.
+- Camino crítico (holgura total = 0), resaltado por color **y** borde.
+- Dependencias generalizadas **FS, SS, FF, SF** con *lag/lead*.
+- Estadística **PERT**: valor esperado `(o+4m+p)/6`, varianza `((p−o)/6)²`, σ del proyecto
+  y probabilidad de cumplir una fecha meta (aproximación normal).
+- Detección de ciclos y referencias inválidas.
+
+### Backend
+
+```bash
+cd backend
+pip install -r requirements.txt
+pytest -v                       # 10/10 pruebas del motor
+uvicorn app.main:app --reload   # API en http://localhost:8000/docs
+```
+
+Endpoints implementados:
+- `POST /api/v1/cpm/preview` — recálculo sin persistir (Gantt en tiempo real).
+- `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?".
+- `GET /health`.
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev                     # http://localhost:5173
+```
+
+## Diseño
+
+Paleta agro + tecnología: verdes profundos (`#14432A`, `#2E7D4F`), azules digitales
+(`#1E6FD9`), grises limpios y rojo de camino crítico (`#E4572E`). Responsivo,
+*mobile-first*, accesibilidad AA y modo offline limitado (IndexedDB/SQLite).
+
+Ver detalle en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).

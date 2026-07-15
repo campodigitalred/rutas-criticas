@@ -1,0 +1,87 @@
+/* Campo Crítico — tokens de diseño (agro + tecnología) */
+:root {
+  --cc-green-900: #14432a;
+  --cc-green-600: #2e7d4f;
+  --cc-green-300: #8fd3a8;
+  --cc-blue-600: #1e6fd9;
+  --cc-blue-300: #7fb4f2;
+  --cc-critical: #e4572e;
+  --cc-slack: #f2b705;
+  --cc-gray-900: #1f2933;
+  --cc-gray-500: #7b8794;
+  --cc-gray-100: #f5f7fa;
+  --cc-white: #ffffff;
+  --cc-radius: 10px;
+  --cc-shadow: 0 1px 3px rgba(20, 67, 42, 0.12), 0 4px 12px rgba(20, 67, 42, 0.08);
+  --cc-font: "Inter", "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--cc-font);
+  color: var(--cc-gray-900);
+  background: var(--cc-gray-100);
+}
+
+.cc-app { max-width: 1120px; margin: 0 auto; padding: 24px; }
+
+.cc-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; margin-bottom: 20px;
+}
+.cc-brand { display: flex; align-items: center; gap: 12px; }
+.cc-logo {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: linear-gradient(135deg, var(--cc-green-900), var(--cc-green-600));
+  display: grid; place-items: center; color: var(--cc-white); font-weight: 800;
+}
+.cc-brand h1 { font-size: 20px; margin: 0; }
+.cc-brand p { margin: 0; color: var(--cc-gray-500); font-size: 13px; }
+
+.cc-stats { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+.cc-stat {
+  background: var(--cc-white); border-radius: var(--cc-radius);
+  padding: 14px 18px; box-shadow: var(--cc-shadow); min-width: 140px;
+}
+.cc-stat .label { font-size: 12px; color: var(--cc-gray-500); text-transform: uppercase; letter-spacing: .04em; }
+.cc-stat .value { font-size: 24px; font-weight: 700; }
+.cc-stat.critical .value { color: var(--cc-critical); }
+
+.cc-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.cc-tab {
+  border: 1px solid transparent; background: var(--cc-white);
+  padding: 8px 16px; border-radius: 999px; cursor: pointer; font-weight: 600;
+  color: var(--cc-gray-500); box-shadow: var(--cc-shadow);
+}
+.cc-tab.active { background: var(--cc-green-600); color: var(--cc-white); }
+
+.cc-panel {
+  background: var(--cc-white); border-radius: var(--cc-radius);
+  padding: 20px; box-shadow: var(--cc-shadow); overflow: auto;
+}
+
+.cc-legend { display: flex; gap: 18px; flex-wrap: wrap; margin: 8px 0 18px; font-size: 13px; color: var(--cc-gray-500); }
+.cc-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.cc-swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+
+/* Gantt */
+.cc-gantt-row { display: flex; align-items: center; height: 40px; }
+.cc-gantt-label { width: 220px; flex: 0 0 220px; font-size: 13px; font-weight: 600; padding-right: 12px; }
+.cc-gantt-track { position: relative; flex: 1; height: 100%; border-left: 1px dashed #e1e7ee; }
+.cc-gantt-bar {
+  position: absolute; top: 8px; height: 24px; border-radius: 6px;
+  background: var(--cc-green-600); cursor: grab; display: flex; align-items: center;
+  color: var(--cc-white); font-size: 11px; padding: 0 6px; user-select: none;
+}
+.cc-gantt-bar.critical { background: var(--cc-critical); }
+.cc-gantt-bar .handle { position: absolute; right: 0; top: 0; width: 8px; height: 100%; cursor: ew-resize; }
+.cc-gantt-slack {
+  position: absolute; top: 16px; height: 8px; border-radius: 4px;
+  background: repeating-linear-gradient(45deg, var(--cc-slack), var(--cc-slack) 3px, transparent 3px, transparent 6px);
+  opacity: .8;
+}
+.cc-axis { display: flex; margin-left: 220px; color: var(--cc-gray-500); font-size: 11px; border-top: 1px solid #e1e7ee; padding-top: 4px; }
+
+.cc-hint { color: var(--cc-gray-500); font-size: 12px; margin-top: 12px; }
