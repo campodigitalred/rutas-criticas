@@ -260,3 +260,19 @@ body {
 .cc-res-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
 .cc-res-badge.client_wins { background: #eaf2fd; color: var(--cc-blue-600); }
 .cc-res-badge.server_wins { background: #fdece6; color: var(--cc-critical); }
+
+
+/* ---- Autenticación (Login + badge de usuario) ---- */
+.cc-login { max-width: 440px; margin: 6vh auto 0; }
+.cc-login .cc-card { margin-bottom: 14px; }
+.cc-form-label { display: block; font-size: 12px; color: var(--cc-gray-500); margin-bottom: 10px; }
+.cc-form-label input { margin-top: 4px; }
+
+.cc-userbadge { display: flex; align-items: center; gap: 12px; }
+.cc-userinfo { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.2; }
+.cc-username { font-weight: 700; font-size: 14px; }
+.cc-rolechip {
+  font-size: 11px; color: var(--cc-white); background: var(--cc-green-600);
+  padding: 2px 10px; border-radius: 999px; margin-top: 2px;
+}
+.cc-header { justify-content: space-between; }

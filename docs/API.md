@@ -7,14 +7,43 @@ Convenciones: `200/201` éxito, `400` validación, `401/403` auth, `404` no exis
 
 ---
 
-## Autenticación
+## Autenticación ✅ (JWT + RBAC)
+
+JWT **HS256** firmado por el servidor; contraseñas con **PBKDF2-HMAC-SHA256** (con sal).
+El token se envía en `Authorization: Bearer <JWT>`. Config: `CAMPO_JWT_SECRET`.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/auth/register` | Alta de organización + usuario admin. |
-| `POST` | `/auth/login` | Devuelve `access_token` (JWT) y `refresh_token`. |
-| `POST` | `/auth/refresh` | Renueva el token. |
-| `GET`  | `/auth/me` | Perfil del usuario autenticado. |
+| `POST` | `/auth/register` | Alta de organización + usuario **admin**; devuelve el token. |
+| `POST` | `/auth/login` | Autentica y devuelve `{ token, token_type, user }`. |
+| `GET`  | `/auth/me` | Perfil y **permisos** del usuario autenticado. |
+| `POST` | `/auth/users` | Crea usuarios con rol (requiere `user:manage`). |
+
+**Roles y permisos (RBAC).** Los endpoints exigen permisos según el rol:
+
+| Rol | Permisos |
+|---|---|
+| `admin` / `director` | todo: `project:read/write/delete`, `task:write/execute`, `dependency:write`, `resource:write`, `report:read`, `user:manage` |
+| `consultor` | planifica y edita: todo salvo `project:delete` y `user:manage` |
+| `aliado` (campo) | solo `project:read`, `task:execute`, `report:read` |
+
+Errores: `401` sin token / token inválido o expirado; `403` rol sin el permiso requerido.
+
+**Ejemplo — `POST /auth/login`**
+```json
+// Request
+{ "email": "dir@campo.mx", "password": "Sembrar-2025!" }
+
+// Response 200
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI….<firma>",
+  "token_type": "bearer",
+  "user": { "id": "…", "email": "dir@campo.mx", "role": "director", "organization_id": "…" }
+}
+```
+
+> Los claims del JWT incluyen `sub`, `email`, `role`, `org`, `name`, `iat`, `exp`. El backend
+> **valida la firma** y aplica RBAC; el frontend solo decodifica el payload para condicionar la UI.
 
 ## Proyectos ✅ (persistidos en BD)
 

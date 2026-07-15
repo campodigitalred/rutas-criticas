@@ -363,3 +363,40 @@ class OrganizationCreate(BaseModel):
 
 class ProjectSyncRequest(BaseModel):
     mutations: List[MutationIn] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# Autenticación
+# --------------------------------------------------------------------------- #
+class RegisterRequest(BaseModel):
+    organization_name: str
+    email: str
+    full_name: str
+    password: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class CreateUserRequest(BaseModel):
+    email: str
+    full_name: str
+    password: str
+    role: Literal["consultor", "director", "aliado", "admin"] = "consultor"
+
+
+class AuthResponse(BaseModel):
+    token: str
+    token_type: str = "bearer"
+    user: Dict[str, Any]
+
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    role: str
+    organization_id: str
+    permissions: List[str] = Field(default_factory=list)

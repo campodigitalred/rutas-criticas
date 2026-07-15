@@ -38,6 +38,7 @@ rutas-criticas/
 │   ├── app/resources/    # Carga y sobreasignación de recursos
 │   ├── app/reporting/    # EVM y exportadores (MS Project/P6/CSV)
 │   ├── app/sync/         # Sincronización offline (LWW a nivel de campo)
+│   ├── app/auth/         # Autenticación JWT + RBAC (roles/permisos)
 │   ├── app/db/           # Persistencia: repositorios sqlite3 + ORM PostgreSQL
 │   ├── app/main.py       # API
 │   └── tests/            # 90 pruebas (pytest)
@@ -67,6 +68,25 @@ ruta crítica.
 - Frontend: `frontend/src/components/IdeaIntakeWizard.jsx` (idea → EDT editable → ruta),
   con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
 - Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
+
+## Autenticación y control de acceso (RBAC)
+
+Autenticación con **JWT HS256** y contraseñas **PBKDF2-HMAC-SHA256** (con sal, 200k iteraciones),
+implementadas solo con la biblioteca estándar (`backend/app/auth/`) → verificables sin
+dependencias. En producción pueden sustituirse por PyJWT/passlib manteniendo el contrato.
+
+- **Roles**: `admin`, `director`, `consultor`, `aliado` (aliado rural: lectura + ejecución de
+  tareas en campo). Cada endpoint exige un **permiso** (`project:write`, `project:delete`,
+  `task:execute`, `user:manage`, …) mediante la dependencia `require_permission`.
+- `AuthService`: registro (organización + admin), alta de usuarios con rol, autenticación en
+  **tiempo constante** (sin enumeración de usuarios) y emisión/verificación de tokens.
+- Endpoints: `POST /auth/register`, `/auth/login`, `GET /auth/me`, `POST /auth/users`.
+- Frontend: `authClient.js` (token en localStorage, decodificación de claims, **espejo de
+  permisos**), `LoginView` y gateo de la UI por rol (el `aliado` no planifica; ejecuta en campo).
+
+```bash
+export CAMPO_JWT_SECRET="una-clave-larga-y-secreta"   # firmar/verificar JWT en producción
+```
 
 ## Persistencia
 
@@ -168,7 +188,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 90/90 pruebas (cores + persistencia)
+pytest -v                       # 104/104 pruebas (cores + persistencia + auth)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -183,6 +203,7 @@ Endpoints implementados:
 - `POST /api/v1/export/{csv,msproject,p6}` — exportadores profesionales.
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
 - `POST /api/v1/sync` — sincronización offline (fusión con LWW a nivel de campo).
+- **Autenticación**: `POST /auth/register`, `/auth/login`, `GET /auth/me`, `POST /auth/users` (JWT + RBAC).
 - **Persistencia**: `POST /projects`, `/projects/from-wbs`, `GET/PATCH/DELETE /projects/{id}`,
   `GET/POST /projects/{id}/tasks`, `PATCH/DELETE /tasks/{id}`, `/projects/{id}/dependencies`,
   `POST /projects/{id}/cpm/compute`, `GET /projects/{id}/snapshot`, `POST /projects/{id}/sync`.

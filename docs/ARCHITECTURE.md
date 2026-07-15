@@ -120,7 +120,7 @@ Prototipo de referencia: [`frontend/src/components/CriticalPathView.jsx`](../fro
 | Async | Celery + Redis | Simulaciones y exportaciones pesadas. |
 | Base de datos | **PostgreSQL 15** | Integridad relacional, consultas recursivas (CTE) para DAG. |
 | Cache/offline | IndexedDB (web) / SQLite (móvil) | Modo offline limitado. |
-| Auth | OAuth2 + JWT | Roles: consultor, director, aliado. |
+| Auth ✅ | JWT HS256 + PBKDF2 (stdlib) + RBAC | Implementado. Roles: admin, director, consultor, aliado. Ver `backend/app/auth/`. |
 | IA | LLM vía API + Whisper | Desglose EDT y transcripción. |
 
 ---

@@ -42,17 +42,34 @@ from .db import (
     recompute_and_store_cpm,
 )
 from .db.repository import NotFound, RepositoryError
+from .auth import AuthError, permissions_for
+from .auth.deps import get_auth_service, get_current_user, require_permission
+from .auth.rbac import (
+    P_DEPENDENCY_WRITE,
+    P_PROJECT_DELETE,
+    P_PROJECT_READ,
+    P_PROJECT_WRITE,
+    P_TASK_EXECUTE,
+    P_TASK_WRITE,
+    P_USER_MANAGE,
+)
+from .auth.service import AuthService
 from .schemas import (
+    AuthResponse,
     CPMRequest,
     CPMResponse,
+    CreateUserRequest,
     DependencyCreate,
+    LoginRequest,
     OrganizationCreate,
     ProjectCreate,
     ProjectFromWBSRequest,
     ProjectSyncRequest,
     ProjectUpdate,
+    RegisterRequest,
     TaskCreate,
     TaskUpdate,
+    UserResponse,
     EVMRequest,
     EVMResponse,
     ExecutionSummaryRequest,
@@ -323,6 +340,50 @@ def sync(req: SyncRequest) -> SyncResponse:
 
 
 # ==========================================================================> #
+# AUTENTICACIÓN (JWT + RBAC)
+# ==========================================================================> #
+@app.post("/api/v1/auth/register", response_model=AuthResponse, tags=["auth"], status_code=201)
+def auth_register(req: RegisterRequest, auth: AuthService = Depends(get_auth_service)) -> AuthResponse:
+    """Alta de una organización y su usuario administrador; devuelve un token."""
+    try:
+        out = auth.register(req.organization_name, req.email, req.full_name, req.password)
+    except AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return AuthResponse(token=out["token"], user=out["user"])
+
+
+@app.post("/api/v1/auth/login", response_model=AuthResponse, tags=["auth"])
+def auth_login(req: LoginRequest, auth: AuthService = Depends(get_auth_service)) -> AuthResponse:
+    try:
+        out = auth.authenticate(req.email, req.password)
+    except AuthError:
+        raise HTTPException(status_code=401, detail="Credenciales inválidas.")
+    return AuthResponse(token=out["token"], user=out["user"])
+
+
+@app.get("/api/v1/auth/me", response_model=UserResponse, tags=["auth"])
+def auth_me(user: dict = Depends(get_current_user)) -> UserResponse:
+    return UserResponse(
+        id=user["sub"], email=user["email"], full_name=user.get("name", ""),
+        role=user["role"], organization_id=user["org"],
+        permissions=sorted(permissions_for(user["role"])),
+    )
+
+
+@app.post("/api/v1/auth/users", tags=["auth"], status_code=201)
+def auth_create_user(
+    req: CreateUserRequest,
+    user: dict = Depends(require_permission(P_USER_MANAGE)),
+    auth: AuthService = Depends(get_auth_service),
+) -> dict:
+    """Crea un usuario en la organización del solicitante (requiere user:manage)."""
+    try:
+        return auth.create_user(user["org"], req.email, req.full_name, req.password, req.role)
+    except AuthError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ==========================================================================> #
 # PERSISTENCIA — proyectos, tareas y dependencias (BD)
 # ==========================================================================> #
 def _require(entity, label: str):
@@ -337,7 +398,8 @@ def create_organization(req: OrganizationCreate, db: Database = Depends(get_data
 
 
 @app.post("/api/v1/projects", tags=["persistence"], status_code=201)
-def create_project(req: ProjectCreate, db: Database = Depends(get_database)) -> dict:
+def create_project(req: ProjectCreate, db: Database = Depends(get_database),
+                   _user: dict = Depends(require_permission(P_PROJECT_WRITE))) -> dict:
     try:
         return ProjectRepository(db).create(req.organization_id, req.name, **req.model_dump(exclude={"organization_id", "name"}))
     except Exception as exc:  # p.ej. FK inexistente
@@ -345,7 +407,8 @@ def create_project(req: ProjectCreate, db: Database = Depends(get_database)) -> 
 
 
 @app.post("/api/v1/projects/from-wbs", tags=["persistence"], status_code=201)
-def create_project_from_wbs(req: ProjectFromWBSRequest, db: Database = Depends(get_database)) -> dict:
+def create_project_from_wbs(req: ProjectFromWBSRequest, db: Database = Depends(get_database),
+                            _user: dict = Depends(require_permission(P_PROJECT_WRITE))) -> dict:
     """Crea un proyecto persistido a partir de una EDT (salida del asistente IA)."""
     payload = req.model_dump()
     try:
@@ -365,12 +428,14 @@ def create_project_from_wbs(req: ProjectFromWBSRequest, db: Database = Depends(g
 
 @app.get("/api/v1/projects", tags=["persistence"])
 def list_projects(organization_id: str | None = None, status: str | None = None,
-                  db: Database = Depends(get_database)) -> list:
+                  db: Database = Depends(get_database),
+                  _user: dict = Depends(require_permission(P_PROJECT_READ))) -> list:
     return ProjectRepository(db).list(organization_id, status)
 
 
 @app.get("/api/v1/projects/{project_id}", tags=["persistence"])
-def get_project(project_id: str, db: Database = Depends(get_database)) -> dict:
+def get_project(project_id: str, db: Database = Depends(get_database),
+                _user: dict = Depends(require_permission(P_PROJECT_READ))) -> dict:
     projects = ProjectRepository(db)
     project = _require(projects.get(project_id), "Proyecto")
     return {
@@ -381,7 +446,8 @@ def get_project(project_id: str, db: Database = Depends(get_database)) -> dict:
 
 
 @app.patch("/api/v1/projects/{project_id}", tags=["persistence"])
-def update_project(project_id: str, req: ProjectUpdate, db: Database = Depends(get_database)) -> dict:
+def update_project(project_id: str, req: ProjectUpdate, db: Database = Depends(get_database),
+                   _user: dict = Depends(require_permission(P_PROJECT_WRITE))) -> dict:
     fields = {k: v for k, v in req.model_dump().items() if v is not None}
     try:
         return ProjectRepository(db).update(project_id, **fields)
@@ -390,17 +456,20 @@ def update_project(project_id: str, req: ProjectUpdate, db: Database = Depends(g
 
 
 @app.delete("/api/v1/projects/{project_id}", tags=["persistence"], status_code=204)
-def delete_project(project_id: str, db: Database = Depends(get_database)) -> None:
+def delete_project(project_id: str, db: Database = Depends(get_database),
+                   _user: dict = Depends(require_permission(P_PROJECT_DELETE))) -> None:
     ProjectRepository(db).delete(project_id)
 
 
 @app.get("/api/v1/projects/{project_id}/tasks", tags=["persistence"])
-def list_tasks(project_id: str, db: Database = Depends(get_database)) -> list:
+def list_tasks(project_id: str, db: Database = Depends(get_database),
+               _user: dict = Depends(require_permission(P_PROJECT_READ))) -> list:
     return TaskRepository(db).list(project_id)
 
 
 @app.post("/api/v1/projects/{project_id}/tasks", tags=["persistence"], status_code=201)
-def create_task(project_id: str, req: TaskCreate, db: Database = Depends(get_database)) -> dict:
+def create_task(project_id: str, req: TaskCreate, db: Database = Depends(get_database),
+                _user: dict = Depends(require_permission(P_TASK_WRITE))) -> dict:
     _require(ProjectRepository(db).get(project_id), "Proyecto")
     try:
         return TaskRepository(db).create(project_id, req.name, **req.model_dump(exclude={"name"}))
@@ -409,7 +478,8 @@ def create_task(project_id: str, req: TaskCreate, db: Database = Depends(get_dat
 
 
 @app.patch("/api/v1/tasks/{task_id}", tags=["persistence"])
-def update_task(task_id: str, req: TaskUpdate, db: Database = Depends(get_database)) -> dict:
+def update_task(task_id: str, req: TaskUpdate, db: Database = Depends(get_database),
+                _user: dict = Depends(require_permission(P_TASK_WRITE))) -> dict:
     fields = {k: v for k, v in req.model_dump().items() if v is not None}
     try:
         return TaskRepository(db).update(task_id, **fields)
@@ -420,17 +490,20 @@ def update_task(task_id: str, req: TaskUpdate, db: Database = Depends(get_databa
 
 
 @app.delete("/api/v1/tasks/{task_id}", tags=["persistence"], status_code=204)
-def delete_task(task_id: str, db: Database = Depends(get_database)) -> None:
+def delete_task(task_id: str, db: Database = Depends(get_database),
+                _user: dict = Depends(require_permission(P_TASK_WRITE))) -> None:
     TaskRepository(db).delete(task_id)
 
 
 @app.get("/api/v1/projects/{project_id}/dependencies", tags=["persistence"])
-def list_dependencies(project_id: str, db: Database = Depends(get_database)) -> list:
+def list_dependencies(project_id: str, db: Database = Depends(get_database),
+                      _user: dict = Depends(require_permission(P_PROJECT_READ))) -> list:
     return DependencyRepository(db).list(project_id)
 
 
 @app.post("/api/v1/projects/{project_id}/dependencies", tags=["persistence"], status_code=201)
-def create_dependency(project_id: str, req: DependencyCreate, db: Database = Depends(get_database)) -> dict:
+def create_dependency(project_id: str, req: DependencyCreate, db: Database = Depends(get_database),
+                      _user: dict = Depends(require_permission(P_DEPENDENCY_WRITE))) -> dict:
     """Crea una dependencia; rechaza ciclos revalidando el DAG con el motor CPM."""
     _require(ProjectRepository(db).get(project_id), "Proyecto")
     dep_repo = DependencyRepository(db)
@@ -448,12 +521,14 @@ def create_dependency(project_id: str, req: DependencyCreate, db: Database = Dep
 
 
 @app.delete("/api/v1/dependencies/{dep_id}", tags=["persistence"], status_code=204)
-def delete_dependency(dep_id: str, db: Database = Depends(get_database)) -> None:
+def delete_dependency(dep_id: str, db: Database = Depends(get_database),
+                      _user: dict = Depends(require_permission(P_DEPENDENCY_WRITE))) -> None:
     DependencyRepository(db).delete(dep_id)
 
 
 @app.post("/api/v1/projects/{project_id}/cpm/compute", tags=["persistence"])
-def compute_and_store(project_id: str, db: Database = Depends(get_database)) -> dict:
+def compute_and_store(project_id: str, db: Database = Depends(get_database),
+                      _user: dict = Depends(require_permission(P_PROJECT_READ))) -> dict:
     """Recalcula la ruta crítica sobre los datos persistidos y guarda cpm_result."""
     _require(ProjectRepository(db).get(project_id), "Proyecto")
     try:
@@ -463,14 +538,16 @@ def compute_and_store(project_id: str, db: Database = Depends(get_database)) -> 
 
 
 @app.get("/api/v1/projects/{project_id}/snapshot", tags=["persistence"])
-def project_snapshot(project_id: str, db: Database = Depends(get_database)) -> dict:
+def project_snapshot(project_id: str, db: Database = Depends(get_database),
+                     _user: dict = Depends(require_permission(P_PROJECT_READ))) -> dict:
     """Snapshot del proyecto para cache offline (estado de sincronización)."""
     _require(ProjectRepository(db).get(project_id), "Proyecto")
     return build_snapshot(db, project_id)
 
 
 @app.post("/api/v1/projects/{project_id}/sync", response_model=SyncResponse, tags=["persistence"])
-def project_sync(project_id: str, req: ProjectSyncRequest, db: Database = Depends(get_database)) -> SyncResponse:
+def project_sync(project_id: str, req: ProjectSyncRequest, db: Database = Depends(get_database),
+                 _user: dict = Depends(require_permission(P_TASK_EXECUTE))) -> SyncResponse:
     """Sincroniza la cola de mutaciones offline y persiste los cambios en la BD."""
     _require(ProjectRepository(db).get(project_id), "Proyecto")
     payload = req.model_dump()
