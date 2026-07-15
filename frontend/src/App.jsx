@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import IdeaIntakeWizard from "./components/IdeaIntakeWizard";
 import CriticalPathView from "./components/CriticalPathView";
+import SyncStatusBar from "./components/SyncStatusBar";
+import { OfflineSyncProvider } from "./context/OfflineSyncContext.jsx";
 import "./theme.css";
 
 /**
  * Flujo de Campo Crítico:
  *   1. Ingreso inteligente (IdeaIntakeWizard) — idea -> EDT.
- *   2. Ruta crítica (CriticalPathView) — Gantt + red PERT sobre la EDT aceptada.
+ *   2. Ruta crítica (CriticalPathView) — Gantt + red PERT + Kanban + simulación +
+ *      recursos + dashboard, con sincronización offline (SyncStatusBar).
  */
 export default function App() {
   const [plan, setPlan] = useState(null); // { tasks, deps } | null
@@ -29,18 +32,16 @@ export default function App() {
   }
 
   return (
-    <div>
-      <div style={{ maxWidth: 1120, margin: "0 auto", padding: "16px 24px 0" }}>
-        <button className="cc-btn ghost" onClick={() => setPlan(null)}>
-          ← Nueva idea
-        </button>
+    <OfflineSyncProvider key={plan.tasks.map((t) => t.id).join("-")} initialTasks={plan.tasks}>
+      <div>
+        <div style={{ maxWidth: 1120, margin: "0 auto", padding: "16px 24px 0" }}>
+          <button className="cc-btn ghost" onClick={() => setPlan(null)}>
+            ← Nueva idea
+          </button>
+          <SyncStatusBar />
+        </div>
+        <CriticalPathView initialTasks={plan.tasks} initialDeps={plan.deps} />
       </div>
-      {/* key fuerza remount para reinicializar el estado interno con el nuevo plan */}
-      <CriticalPathView
-        key={plan.tasks.map((t) => t.id).join("-")}
-        initialTasks={plan.tasks}
-        initialDeps={plan.deps}
-      />
-    </div>
+    </OfflineSyncProvider>
   );
 }

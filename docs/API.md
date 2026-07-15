@@ -287,7 +287,56 @@ Salud: `not_started` · `in_progress` · `on_track` · `at_risk` · `behind` · 
 
 ## Sincronización offline
 
+Para zonas rurales sin señal: los cambios se encolan localmente como *mutaciones*
+y se envían al recuperar conexión. El servidor las fusiona con resolución de
+conflictos **última-escritura-gana a nivel de campo** (LWW).
+
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET`  | `/projects/{id}/snapshot` | Snapshot completo para cache local. |
-| `POST` | `/projects/{id}/sync` | Envía cola de mutaciones offline; devuelve conflictos resueltos. |
+| `POST` | `/sync` | **(sin estado)** Aplica la cola de mutaciones al `server_state` y devuelve `applied`, `rejected`, `conflicts` y el estado fusionado con su marca de agua (`server_ts`). |
+| `GET`  | `/projects/{id}/snapshot` | Snapshot completo del proyecto para cache local (persistencia). |
+
+Estado del servidor: `{"entities": {"<id>": {"id","type","deleted","deleted_ts","fields": {"<campo>": {"value","ts"}}}}}`.
+Mutación: `{mutation_id, entity_type, entity_id, op ("set"|"delete"), field, value, ts, base_ts}`
+donde `base_ts` es el `ts` del campo que el cliente tenía al editar (para detectar cambios ajenos).
+
+Reglas: **conflicto** cuando `server_ts > base_ts` (alguien más cambió el campo desde la base del
+cliente); se resuelve por LWW (gana el `ts` mayor; empate → servidor) y se registra para revisión.
+Sin conflicto y mutación más vieja → descartada como `stale`.
+
+**Ejemplo — `POST /sync`**
+```json
+// Request — el servidor ya tenía progress_pct=40 (ts 80); el cliente editó offline
+{
+  "server_state": {
+    "entities": {
+      "T1": { "id": "T1", "type": "task", "deleted": false, "deleted_ts": 0,
+        "fields": { "progress_pct": {"value": 40, "ts": 80}, "status": {"value": "todo", "ts": 50} } }
+    }
+  },
+  "mutations": [
+    { "mutation_id": "m1", "entity_id": "T1", "op": "set", "field": "progress_pct", "value": 90, "ts": 120, "base_ts": 50 },
+    { "mutation_id": "m2", "entity_id": "T1", "op": "set", "field": "status", "value": "in_progress", "ts": 115, "base_ts": 50 }
+  ]
+}
+
+// Response 200
+{
+  "applied": [
+    { "mutation_id": "m2", "entity_id": "T1", "op": "set", "field": "status", "value": "in_progress", "ts": 115 },
+    { "mutation_id": "m1", "entity_id": "T1", "op": "set", "field": "progress_pct", "value": 90, "ts": 120 }
+  ],
+  "rejected": [],
+  "conflicts": [
+    { "entity_id": "T1", "field": "progress_pct", "server_value": 40, "client_value": 90,
+      "server_ts": 80, "client_ts": 120, "resolution": "client_wins" }
+  ],
+  "server_state": { "entities": { "T1": { "…": "…" } } },
+  "server_ts": 120.0
+}
+```
+
+> `status` se aplica limpiamente (nadie lo tocó desde la base); `progress_pct` genera un
+> **conflicto** (el servidor lo cambió a 40 tras la base del cliente) resuelto por LWW a favor del
+> cliente (120 > 80). El frontend cachea el snapshot y la cola en IndexedDB/localStorage y
+> sincroniza al volver la señal (ver `frontend/src/lib/offlineStore.js` y `sync.js`).

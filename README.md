@@ -138,7 +138,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 67/67 pruebas (CPM + IA + ejecución + Monte Carlo + recursos + EVM + export)
+pytest -v                       # 78/78 pruebas (CPM + IA + ejecución + MC + recursos + EVM + export + sync)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -152,6 +152,7 @@ Endpoints implementados:
 - `POST /api/v1/reporting/evm` — dashboard de Valor Ganado (EVM).
 - `POST /api/v1/export/{csv,msproject,p6}` — exportadores profesionales.
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
+- `POST /api/v1/sync` — sincronización offline (fusión con LWW a nivel de campo).
 - `GET /health`.
 
 Para activar el LLM real:

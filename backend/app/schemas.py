@@ -1,7 +1,7 @@
 """Modelos Pydantic para la API de Campo Crítico."""
 from __future__ import annotations
 
-from typing import Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -243,3 +243,31 @@ class ExportRequest(BaseModel):
     project_name: str = "Campo Crítico"
     project_id: str = "CC1"
     start_date: Optional[str] = None
+
+
+# --------------------------------------------------------------------------- #
+# Sincronización offline
+# --------------------------------------------------------------------------- #
+class MutationIn(BaseModel):
+    mutation_id: str
+    entity_type: str = "task"
+    entity_id: str
+    op: Literal["set", "delete"] = "set"
+    field: Optional[str] = None
+    value: Optional[Any] = None
+    ts: float
+    base_ts: float = 0.0
+
+
+class SyncRequest(BaseModel):
+    # Estado del servidor conocido por el cliente (desde el último snapshot).
+    server_state: Optional[Dict[str, Any]] = None
+    mutations: List[MutationIn] = Field(default_factory=list)
+
+
+class SyncResponse(BaseModel):
+    applied: List[dict]
+    rejected: List[dict]
+    conflicts: List[dict]
+    server_state: Dict[str, Any]
+    server_ts: float

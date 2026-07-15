@@ -235,3 +235,28 @@ body {
   .cc-tabs, .cc-export-bar, .cc-exec-asof { display: none !important; }
   .cc-panel { box-shadow: none; }
 }
+
+
+/* ---- Sincronización offline (SyncStatusBar) ---- */
+.cc-sync-wrap { margin-top: 12px; }
+.cc-syncbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--cc-white); border-radius: 10px; padding: 10px 14px;
+  box-shadow: var(--cc-shadow); font-size: 14px;
+}
+.cc-sync-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.cc-sync-dot.online { background: var(--cc-green-600); box-shadow: 0 0 0 3px rgba(46,125,79,.2); }
+.cc-sync-dot.offline { background: var(--cc-critical); box-shadow: 0 0 0 3px rgba(228,87,46,.2); }
+.cc-sync-pending {
+  background: var(--cc-gray-100); border-radius: 999px; padding: 3px 12px;
+  font-size: 12px; color: var(--cc-gray-500);
+}
+.cc-sync-actions { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.cc-sync-actions .cc-btn { padding: 7px 14px; font-size: 13px; }
+.cc-sync-result { font-size: 13px; color: var(--cc-gray-500); padding: 8px 14px 0; }
+.cc-linkish { background: none; border: none; color: var(--cc-blue-600); cursor: pointer; font: inherit; text-decoration: underline; padding: 0; }
+.cc-conflicts { background: #fff8e1; border-radius: 10px; padding: 12px 14px; margin-top: 8px; }
+.cc-conflicts h4 { margin: 0 0 8px; font-size: 14px; }
+.cc-res-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+.cc-res-badge.client_wins { background: #eaf2fd; color: var(--cc-blue-600); }
+.cc-res-badge.server_wins { background: #fdece6; color: var(--cc-critical); }

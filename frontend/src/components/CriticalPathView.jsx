@@ -15,6 +15,7 @@ import KanbanView from "./KanbanView";
 import SimulationView from "./SimulationView";
 import ResourceView from "./ResourceView";
 import DashboardView from "./DashboardView";
+import { useOfflineSync } from "../context/OfflineSyncContext.jsx";
 import "../theme.css";
 
 const DAY_PX = 26; // ancho de un día en el Gantt
@@ -224,6 +225,7 @@ export default function CriticalPathView({
   const [tasks, setTasks] = useState(() => initialTasks.map(withExecutionDefaults));
   const [deps] = useState(initialDeps);
   const [view, setView] = useState("gantt");
+  const { recordMutation } = useOfflineSync();
 
   // Recálculo memoizado del motor CPM ante cualquier cambio de duración.
   const result = useMemo(() => {
@@ -246,9 +248,13 @@ export default function CriticalPathView({
           : t
       )
     );
+    // Encola el cambio para sincronización offline.
+    recordMutation(id, "status", status);
+    if (status === "done") recordMutation(id, "progress_pct", 100);
   }
 
   function handleProgressChange(id, progress_pct) {
+    let newStatus = null;
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id !== id) return t;
@@ -257,9 +263,12 @@ export default function CriticalPathView({
         if (progress_pct >= 100) status = "done";
         else if (progress_pct > 0 && status === "todo") status = "in_progress";
         else if (progress_pct < 100 && status === "done") status = "in_progress";
+        newStatus = status !== t.status ? status : null;
         return { ...t, progress_pct, status };
       })
     );
+    recordMutation(id, "progress_pct", progress_pct);
+    if (newStatus) recordMutation(id, "status", newStatus);
   }
 
   return (

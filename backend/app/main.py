@@ -27,6 +27,8 @@ from .resources import resource_load_from_dict
 from .resources.allocation import ResourceError
 from .simulation import run_montecarlo_from_dict
 from .simulation.montecarlo import SimulationError
+from .sync import apply_mutations
+from .sync.engine import SyncError
 from .schemas import (
     CPMRequest,
     CPMResponse,
@@ -41,6 +43,8 @@ from .schemas import (
     ResourceLoadResponse,
     SimulationRequest,
     SimulationResponse,
+    SyncRequest,
+    SyncResponse,
     TranscriptionResponse,
 )
 
@@ -276,3 +280,22 @@ def export_csv(req: ExportRequest) -> Response:
         media_type="text/csv",
         headers={"Content-Disposition": "attachment; filename=campo-critico.csv"},
     )
+
+
+# --------------------------------------------------------------------------- #
+# Sincronización offline
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/sync", response_model=SyncResponse, tags=["sync"])
+def sync(req: SyncRequest) -> SyncResponse:
+    """Aplica la cola de mutaciones offline al estado del servidor.
+
+    Resuelve conflictos con *last-write-wins* a nivel de campo y devuelve las
+    mutaciones aplicadas, las descartadas, los conflictos detectados (para
+    revisión) y el estado del servidor fusionado con su nueva marca de agua.
+    """
+    payload = req.model_dump()
+    try:
+        result = apply_mutations(payload.get("server_state"), payload.get("mutations", []))
+    except SyncError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return SyncResponse(**result)
