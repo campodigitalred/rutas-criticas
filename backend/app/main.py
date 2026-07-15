@@ -6,9 +6,11 @@ sin estado que alimentan la interfaz (recálculo en tiempo real y simulación).
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
+from .ai import BreakdownService
+from .ai.schemas import BreakdownRequest, BreakdownResult
 from .cpm import CPMEngine, CPMError, Dependency, Task
 from .cpm.engine import compute_from_dict
 from .schemas import (
@@ -16,6 +18,7 @@ from .schemas import (
     CPMResponse,
     SimulationRequest,
     SimulationResponse,
+    TranscriptionResponse,
 )
 
 app = FastAPI(
@@ -63,6 +66,44 @@ def _build_engine(tasks, dependencies, overrides=None) -> CPMEngine:
         Dependency(d.predecessor, d.successor, d.dep_type, d.lag) for d in dependencies
     ]
     return CPMEngine(engine_tasks, engine_deps)
+
+
+# --------------------------------------------------------------------------- #
+# Módulo A — Asistente IA de desglose
+# --------------------------------------------------------------------------- #
+_breakdown_service = BreakdownService()
+
+
+@app.post("/api/v1/ai/breakdown", response_model=BreakdownResult, tags=["ai"])
+def ai_breakdown(req: BreakdownRequest) -> BreakdownResult:
+    """Descompone una idea en texto libre en una EDT/WBS validada.
+
+    Usa un LLM si está configurado (CAMPO_LLM_API_KEY) y cae a un generador
+    heurístico offline en caso contrario. La EDT resultante se valida contra el
+    esquema y contra el motor CPM (rechaza ciclos) y devuelve una vista previa
+    de la ruta crítica.
+    """
+    try:
+        return _breakdown_service.run(req)
+    except CPMError as exc:
+        # EDT inválida (ciclo, referencias colgantes, esquema).
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/v1/ai/transcribe", response_model=TranscriptionResponse, tags=["ai"])
+async def ai_transcribe(file: UploadFile = File(...)) -> TranscriptionResponse:
+    """Transcribe una nota de voz a texto (interfaz).
+
+    En producción delega a un motor de speech-to-text (p.ej. Whisper). Aquí se
+    expone el contrato; el binario de audio se recibe como multipart/form-data.
+    """
+    raise HTTPException(
+        status_code=501,
+        detail=(
+            "Transcripción no habilitada en este entorno. Configure un backend "
+            "de speech-to-text (Whisper) para activar /ai/transcribe."
+        ),
+    )
 
 
 @app.post("/api/v1/scenarios/simulate", response_model=SimulationResponse, tags=["simulation"])

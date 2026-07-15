@@ -85,3 +85,53 @@ body {
 .cc-axis { display: flex; margin-left: 220px; color: var(--cc-gray-500); font-size: 11px; border-top: 1px solid #e1e7ee; padding-top: 4px; }
 
 .cc-hint { color: var(--cc-gray-500); font-size: 12px; margin-top: 12px; }
+
+
+/* ---- Asistente IA de ingreso (IdeaIntakeWizard) ---- */
+.cc-wizard { max-width: 820px; margin: 0 auto; }
+.cc-card {
+  background: var(--cc-white); border-radius: var(--cc-radius);
+  padding: 24px; box-shadow: var(--cc-shadow); margin-bottom: 16px;
+}
+.cc-card h2 { margin: 0 0 4px; font-size: 18px; }
+.cc-card .sub { color: var(--cc-gray-500); font-size: 13px; margin: 0 0 16px; }
+
+.cc-textarea {
+  width: 100%; min-height: 120px; resize: vertical; padding: 12px 14px;
+  border: 1px solid #d7dee7; border-radius: 10px; font: inherit; font-size: 14px;
+  color: var(--cc-gray-900); background: var(--cc-gray-100);
+}
+.cc-textarea:focus { outline: none; border-color: var(--cc-green-600); background: var(--cc-white); }
+
+.cc-field-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.cc-input {
+  padding: 8px 12px; border: 1px solid #d7dee7; border-radius: 8px; font: inherit;
+  width: 120px;
+}
+.cc-btn {
+  border: none; border-radius: 999px; padding: 10px 20px; font-weight: 700;
+  cursor: pointer; font-size: 14px;
+}
+.cc-btn.primary { background: var(--cc-green-600); color: var(--cc-white); }
+.cc-btn.primary:hover { background: var(--cc-green-900); }
+.cc-btn.ghost { background: var(--cc-gray-100); color: var(--cc-gray-900); }
+.cc-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.cc-chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 0; }
+.cc-chip {
+  background: var(--cc-gray-100); border: 1px dashed #cbd5e0; border-radius: 999px;
+  padding: 6px 12px; font-size: 12px; cursor: pointer; color: var(--cc-gray-500);
+}
+.cc-chip:hover { border-color: var(--cc-green-600); color: var(--cc-green-600); }
+
+.cc-warning {
+  background: #fff8e1; border-left: 3px solid var(--cc-slack); border-radius: 6px;
+  padding: 8px 12px; font-size: 13px; margin-top: 8px; color: #6b5900;
+}
+
+.cc-edt-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.cc-edt-table th, .cc-edt-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid #eef2f6; }
+.cc-edt-table th { color: var(--cc-gray-500); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.cc-edt-table input { width: 56px; padding: 4px 6px; border: 1px solid #d7dee7; border-radius: 6px; font: inherit; }
+.cc-phase-tag { font-size: 11px; color: var(--cc-blue-600); background: #eaf2fd; border-radius: 6px; padding: 2px 8px; }
+.cc-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }

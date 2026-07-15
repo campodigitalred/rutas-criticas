@@ -73,3 +73,9 @@ class SimulationResponse(BaseModel):
     critical_path_scenario: List[str]
     budget_impact: float
     probability_on_time: Optional[float] = None
+
+
+class TranscriptionResponse(BaseModel):
+    text: str
+    language: Optional[str] = None
+    duration_seconds: Optional[float] = None

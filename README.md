@@ -14,9 +14,9 @@ para técnicos en zonas rurales sin señal.
 
 | # | Módulo | Estado en este repo |
 |---|---|---|
-| A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | Especificado + endpoints |
+| A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | ✅ Implementado (LLM + heurístico offline) |
 | B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
-| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Prototipo React (Red + Gantt) |
+| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Prototipo React (Wizard IA + Red + Gantt) |
 | D | Recursos y simulación "¿Qué pasaría si…?" | Endpoint + esquema |
 | E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
 
@@ -40,6 +40,27 @@ rutas-criticas/
         └── components/CriticalPathView.jsx  # Vista de Ruta Crítica (Red PERT + Gantt)
 ```
 
+## Asistente IA de desglose (Módulo A)
+
+Convierte una idea en texto libre en una EDT/WBS validada, lista para el motor CPM.
+Arquitectura de proveedores intercambiables:
+
+- **`OpenAICompatibleProvider`** — llama a un LLM real (config por entorno
+  `CAMPO_LLM_API_KEY`, `CAMPO_LLM_BASE_URL`, `CAMPO_LLM_MODEL`).
+- **`HeuristicProvider`** — genera la EDT **sin conexión** con plantillas de dominio
+  (censo/datos, software, capacitación, agrícola, genérico) y detección de plazo
+  («3 meses» → 90 días). Es el respaldo cuando no hay red/API key.
+
+El orquestador (`backend/app/ai/breakdown.py`) valida la salida contra el esquema,
+la pasa por el motor CPM (**rechaza ciclos y referencias colgantes**) y **escala las
+duraciones** para caber en el horizonte objetivo. Devuelve la EDT + vista previa de
+ruta crítica.
+
+- Endpoints: `POST /api/v1/ai/breakdown`, `POST /api/v1/ai/transcribe` (interfaz Whisper).
+- Frontend: `frontend/src/components/IdeaIntakeWizard.jsx` (idea → EDT editable → ruta),
+  con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
+- Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
+
 ## El motor CPM/PERT (núcleo)
 
 Implementado **dos veces con paridad de resultados**: en Python (`backend/app/cpm/engine.py`)
@@ -59,14 +80,22 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 10/10 pruebas del motor
+pytest -v                       # 18/18 pruebas (motor CPM + asistente IA)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
 Endpoints implementados:
+- `POST /api/v1/ai/breakdown` — idea en texto → EDT validada + ruta crítica.
+- `POST /api/v1/ai/transcribe` — nota de voz → texto (interfaz Whisper).
 - `POST /api/v1/cpm/preview` — recálculo sin persistir (Gantt en tiempo real).
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?".
 - `GET /health`.
+
+Para activar el LLM real:
+```bash
+export CAMPO_LLM_API_KEY=sk-...      # sin esto, usa el heurístico offline
+export CAMPO_LLM_MODEL=gpt-4o-mini   # opcional
+```
 
 ### Frontend
 
