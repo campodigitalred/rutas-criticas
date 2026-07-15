@@ -6,7 +6,7 @@ sin estado que alimentan la interfaz (recálculo en tiempo real y simulación).
 """
 from __future__ import annotations
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 
@@ -29,9 +29,30 @@ from .simulation import run_montecarlo_from_dict
 from .simulation.montecarlo import SimulationError
 from .sync import apply_mutations
 from .sync.engine import SyncError
+from .db import (
+    Database,
+    DependencyRepository,
+    OrganizationRepository,
+    ProjectRepository,
+    TaskRepository,
+    apply_sync_to_db,
+    build_snapshot,
+    create_project_with_wbs,
+    get_database,
+    recompute_and_store_cpm,
+)
+from .db.repository import NotFound, RepositoryError
 from .schemas import (
     CPMRequest,
     CPMResponse,
+    DependencyCreate,
+    OrganizationCreate,
+    ProjectCreate,
+    ProjectFromWBSRequest,
+    ProjectSyncRequest,
+    ProjectUpdate,
+    TaskCreate,
+    TaskUpdate,
     EVMRequest,
     EVMResponse,
     ExecutionSummaryRequest,
@@ -296,6 +317,165 @@ def sync(req: SyncRequest) -> SyncResponse:
     payload = req.model_dump()
     try:
         result = apply_mutations(payload.get("server_state"), payload.get("mutations", []))
+    except SyncError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return SyncResponse(**result)
+
+
+# ==========================================================================> #
+# PERSISTENCIA — proyectos, tareas y dependencias (BD)
+# ==========================================================================> #
+def _require(entity, label: str):
+    if entity is None:
+        raise HTTPException(status_code=404, detail=f"{label} no encontrado.")
+    return entity
+
+
+@app.post("/api/v1/organizations", tags=["persistence"], status_code=201)
+def create_organization(req: OrganizationCreate, db: Database = Depends(get_database)) -> dict:
+    return OrganizationRepository(db).create(req.name)
+
+
+@app.post("/api/v1/projects", tags=["persistence"], status_code=201)
+def create_project(req: ProjectCreate, db: Database = Depends(get_database)) -> dict:
+    try:
+        return ProjectRepository(db).create(req.organization_id, req.name, **req.model_dump(exclude={"organization_id", "name"}))
+    except Exception as exc:  # p.ej. FK inexistente
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.post("/api/v1/projects/from-wbs", tags=["persistence"], status_code=201)
+def create_project_from_wbs(req: ProjectFromWBSRequest, db: Database = Depends(get_database)) -> dict:
+    """Crea un proyecto persistido a partir de una EDT (salida del asistente IA)."""
+    payload = req.model_dump()
+    try:
+        out = create_project_with_wbs(
+            db,
+            organization_id=payload["organization_id"],
+            name=payload["name"],
+            tasks=payload["tasks"],
+            dependencies=payload["dependencies"],
+            objective=payload.get("objective"),
+            budget_estimated=payload.get("budget_estimated"),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return out
+
+
+@app.get("/api/v1/projects", tags=["persistence"])
+def list_projects(organization_id: str | None = None, status: str | None = None,
+                  db: Database = Depends(get_database)) -> list:
+    return ProjectRepository(db).list(organization_id, status)
+
+
+@app.get("/api/v1/projects/{project_id}", tags=["persistence"])
+def get_project(project_id: str, db: Database = Depends(get_database)) -> dict:
+    projects = ProjectRepository(db)
+    project = _require(projects.get(project_id), "Proyecto")
+    return {
+        "project": project,
+        "tasks": TaskRepository(db).list(project_id),
+        "dependencies": DependencyRepository(db).list(project_id),
+    }
+
+
+@app.patch("/api/v1/projects/{project_id}", tags=["persistence"])
+def update_project(project_id: str, req: ProjectUpdate, db: Database = Depends(get_database)) -> dict:
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        return ProjectRepository(db).update(project_id, **fields)
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@app.delete("/api/v1/projects/{project_id}", tags=["persistence"], status_code=204)
+def delete_project(project_id: str, db: Database = Depends(get_database)) -> None:
+    ProjectRepository(db).delete(project_id)
+
+
+@app.get("/api/v1/projects/{project_id}/tasks", tags=["persistence"])
+def list_tasks(project_id: str, db: Database = Depends(get_database)) -> list:
+    return TaskRepository(db).list(project_id)
+
+
+@app.post("/api/v1/projects/{project_id}/tasks", tags=["persistence"], status_code=201)
+def create_task(project_id: str, req: TaskCreate, db: Database = Depends(get_database)) -> dict:
+    _require(ProjectRepository(db).get(project_id), "Proyecto")
+    try:
+        return TaskRepository(db).create(project_id, req.name, **req.model_dump(exclude={"name"}))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.patch("/api/v1/tasks/{task_id}", tags=["persistence"])
+def update_task(task_id: str, req: TaskUpdate, db: Database = Depends(get_database)) -> dict:
+    fields = {k: v for k, v in req.model_dump().items() if v is not None}
+    try:
+        return TaskRepository(db).update(task_id, **fields)
+    except NotFound as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+
+@app.delete("/api/v1/tasks/{task_id}", tags=["persistence"], status_code=204)
+def delete_task(task_id: str, db: Database = Depends(get_database)) -> None:
+    TaskRepository(db).delete(task_id)
+
+
+@app.get("/api/v1/projects/{project_id}/dependencies", tags=["persistence"])
+def list_dependencies(project_id: str, db: Database = Depends(get_database)) -> list:
+    return DependencyRepository(db).list(project_id)
+
+
+@app.post("/api/v1/projects/{project_id}/dependencies", tags=["persistence"], status_code=201)
+def create_dependency(project_id: str, req: DependencyCreate, db: Database = Depends(get_database)) -> dict:
+    """Crea una dependencia; rechaza ciclos revalidando el DAG con el motor CPM."""
+    _require(ProjectRepository(db).get(project_id), "Proyecto")
+    dep_repo = DependencyRepository(db)
+    try:
+        created = dep_repo.create(project_id, req.predecessor_id, req.successor_id, req.dep_type, req.lag_days)
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    # Revalida que no se introdujo un ciclo; si lo hay, revierte.
+    try:
+        recompute_and_store_cpm(db, project_id)
+    except CPMError as exc:
+        dep_repo.delete(created["id"])
+        raise HTTPException(status_code=409, detail=f"La dependencia crea un ciclo: {exc}")
+    return created
+
+
+@app.delete("/api/v1/dependencies/{dep_id}", tags=["persistence"], status_code=204)
+def delete_dependency(dep_id: str, db: Database = Depends(get_database)) -> None:
+    DependencyRepository(db).delete(dep_id)
+
+
+@app.post("/api/v1/projects/{project_id}/cpm/compute", tags=["persistence"])
+def compute_and_store(project_id: str, db: Database = Depends(get_database)) -> dict:
+    """Recalcula la ruta crítica sobre los datos persistidos y guarda cpm_result."""
+    _require(ProjectRepository(db).get(project_id), "Proyecto")
+    try:
+        return recompute_and_store_cpm(db, project_id)
+    except CPMError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+
+
+@app.get("/api/v1/projects/{project_id}/snapshot", tags=["persistence"])
+def project_snapshot(project_id: str, db: Database = Depends(get_database)) -> dict:
+    """Snapshot del proyecto para cache offline (estado de sincronización)."""
+    _require(ProjectRepository(db).get(project_id), "Proyecto")
+    return build_snapshot(db, project_id)
+
+
+@app.post("/api/v1/projects/{project_id}/sync", response_model=SyncResponse, tags=["persistence"])
+def project_sync(project_id: str, req: ProjectSyncRequest, db: Database = Depends(get_database)) -> SyncResponse:
+    """Sincroniza la cola de mutaciones offline y persiste los cambios en la BD."""
+    _require(ProjectRepository(db).get(project_id), "Proyecto")
+    payload = req.model_dump()
+    try:
+        result = apply_sync_to_db(db, project_id, payload["mutations"])
     except SyncError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return SyncResponse(**result)

@@ -30,14 +30,21 @@ rutas-criticas/
 │   └── API.md            # Endpoints REST
 ├── db/
 │   └── schema.sql        # Esquema PostgreSQL
-├── backend/              # FastAPI + motor CPM/PERT (Python)
-│   ├── app/cpm/engine.py # Núcleo del algoritmo
+├── backend/              # FastAPI + núcleos Python
+│   ├── app/cpm/          # Motor CPM/PERT (núcleo)
+│   ├── app/ai/           # Asistente IA de desglose
+│   ├── app/execution/    # Métricas de ejecución (Kanban)
+│   ├── app/simulation/   # Monte Carlo
+│   ├── app/resources/    # Carga y sobreasignación de recursos
+│   ├── app/reporting/    # EVM y exportadores (MS Project/P6/CSV)
+│   ├── app/sync/         # Sincronización offline (LWW a nivel de campo)
+│   ├── app/db/           # Persistencia: repositorios sqlite3 + ORM PostgreSQL
 │   ├── app/main.py       # API
-│   └── tests/            # 10 pruebas del motor (pytest)
+│   └── tests/            # 90 pruebas (pytest)
 └── frontend/             # Prototipo React (Vite)
     └── src/
-        ├── lib/cpm.js                       # Motor CPM/PERT en JS (offline/tiempo real)
-        └── components/CriticalPathView.jsx  # Vista de Ruta Crítica (Red PERT + Gantt)
+        ├── lib/          # Motores en JS (cpm, ai, execution, montecarlo, evm, sync…)
+        └── components/   # Wizard, Ruta Crítica, Kanban, Simulación, Recursos, Dashboard
 ```
 
 ## Asistente IA de desglose (Módulo A)
@@ -60,6 +67,29 @@ ruta crítica.
 - Frontend: `frontend/src/components/IdeaIntakeWizard.jsx` (idea → EDT editable → ruta),
   con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
 - Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
+
+## Persistencia
+
+Acceso a datos real con una **capa de repositorios** (`backend/app/db/`) que ejecuta SQL
+parametrizado. En este repositorio corre sobre **`sqlite3`** (biblioteca estándar → verificable
+sin dependencias), y en **producción** apunta a **PostgreSQL** mediante los modelos ORM
+SQLAlchemy (`app/db/models_orm.py`) que reflejan `db/schema.sql`.
+
+- `schema_sqlite.sql` refleja el esquema PostgreSQL (UUID→TEXT, enums→CHECK, JSONB→TEXT…), con
+  **claves foráneas en cascada** y restricciones (`progress` 0–100, sin auto-dependencia, un solo
+  baseline por proyecto).
+- Repositorios: Organization, User, Project, Task, Dependency, Resource, Scenario, CpmResult.
+- Servicios que **unen persistencia y núcleos**: crear proyecto desde una EDT, **recalcular y
+  guardar** la ruta crítica (`cpm_result`), construir el snapshot y **aplicar la sincronización
+  offline persistiendo los cambios**.
+- Endpoints REST de CRUD + `/cpm/compute`, `/snapshot`, `/sync` por proyecto.
+
+```bash
+# Producción: apuntar a PostgreSQL
+export DATABASE_URL=postgresql+psycopg://user:pass@host/campo_critico
+python -c "from sqlalchemy import create_engine; from app.db.models_orm import Base; \
+Base.metadata.create_all(create_engine('$DATABASE_URL'))"   # o Alembic
+```
 
 ## Exportación y reportes (Módulo E)
 
@@ -138,7 +168,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 78/78 pruebas (CPM + IA + ejecución + MC + recursos + EVM + export + sync)
+pytest -v                       # 90/90 pruebas (cores + persistencia)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -153,6 +183,9 @@ Endpoints implementados:
 - `POST /api/v1/export/{csv,msproject,p6}` — exportadores profesionales.
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
 - `POST /api/v1/sync` — sincronización offline (fusión con LWW a nivel de campo).
+- **Persistencia**: `POST /projects`, `/projects/from-wbs`, `GET/PATCH/DELETE /projects/{id}`,
+  `GET/POST /projects/{id}/tasks`, `PATCH/DELETE /tasks/{id}`, `/projects/{id}/dependencies`,
+  `POST /projects/{id}/cpm/compute`, `GET /projects/{id}/snapshot`, `POST /projects/{id}/sync`.
 - `GET /health`.
 
 Para activar el LLM real:

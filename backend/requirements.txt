@@ -7,9 +7,13 @@ numpy==2.2.1
 # Pruebas
 pytest==8.3.4
 httpx==0.28.1
-# Producción (persistencia, async, exportación) — referencia
-# sqlalchemy==2.0.36
-# psycopg[binary]==3.2.3
+# Persistencia
+# La capa de repositorios usa sqlite3 (stdlib) y funciona sin dependencias.
+# En producción, los modelos ORM (app/db/models_orm.py) operan sobre PostgreSQL:
+sqlalchemy==2.0.36
+psycopg[binary]==3.2.3
+alembic==1.14.0        # migraciones de esquema
+# Producción (async, exportación) — referencia
 # celery[redis]==5.4.0
 # openpyxl==3.1.5      # export XLSX
 # reportlab==4.2.5     # export PDF

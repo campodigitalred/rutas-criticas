@@ -16,18 +16,24 @@ Convenciones: `200/201` éxito, `400` validación, `401/403` auth, `404` no exis
 | `POST` | `/auth/refresh` | Renueva el token. |
 | `GET`  | `/auth/me` | Perfil del usuario autenticado. |
 
-## Proyectos
+## Proyectos ✅ (persistidos en BD)
+
+Implementados sobre la capa de persistencia (`backend/app/db/`). En este repo la BD es
+`sqlite3` (verificable); en producción, PostgreSQL vía los modelos ORM (`app/db/models_orm.py`).
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET`    | `/projects` | Lista proyectos (filtros: `status`, `owner`). |
-| `POST`   | `/projects` | Crea un proyecto (formulario estructurado, Módulo A). |
-| `GET`    | `/projects/{id}` | Detalle con tareas, dependencias y recursos. |
-| `PATCH`  | `/projects/{id}` | Actualiza campos (nombre, presupuesto, deadline…). |
-| `DELETE` | `/projects/{id}` | Elimina el proyecto. |
-| `GET`    | `/projects/{id}/members` · `POST` · `DELETE` | Gestión de miembros. |
-| `GET`    | `/projects/{id}/constraints` · `POST` | Restricciones (geo, conectividad…). |
-| `GET`    | `/projects/{id}/stakeholders` · `POST` | Stakeholders. |
+| `POST`   | `/organizations` | Crea una organización. |
+| `GET`    | `/projects` | Lista proyectos (filtros: `organization_id`, `status`). |
+| `POST`   | `/projects` | Crea un proyecto (formulario estructurado). |
+| `POST`   | `/projects/from-wbs` | **Crea un proyecto completo desde una EDT** (salida del asistente IA): persiste tareas + dependencias + escenario base. |
+| `GET`    | `/projects/{id}` | Detalle con tareas y dependencias. |
+| `PATCH`  | `/projects/{id}` | Actualiza campos (nombre, presupuesto, estado…). |
+| `DELETE` | `/projects/{id}` | Elimina el proyecto (cascada a tareas/dependencias). |
+| `GET`/`POST` | `/projects/{id}/tasks` · `PATCH`/`DELETE` `/tasks/{id}` | CRUD de tareas. |
+| `GET`/`POST` | `/projects/{id}/dependencies` · `DELETE` `/dependencies/{id}` | CRUD de dependencias (rechaza ciclos → `409`). |
+| `POST`   | `/projects/{id}/cpm/compute` | Recalcula la ruta crítica y persiste `cpm_result`. |
+| `GET`    | `/projects/{id}/snapshot` · `POST` `/projects/{id}/sync` | Snapshot y sincronización offline persistida. |
 
 ## Ingreso inteligente (Módulo A — IA)
 

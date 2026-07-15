@@ -271,3 +271,95 @@ class SyncResponse(BaseModel):
     conflicts: List[dict]
     server_state: Dict[str, Any]
     server_ts: float
+
+
+# --------------------------------------------------------------------------- #
+# Persistencia — proyectos, tareas y dependencias
+# --------------------------------------------------------------------------- #
+class ProjectCreate(BaseModel):
+    organization_id: str
+    name: str
+    objective: Optional[str] = None
+    budget_estimated: Optional[float] = None
+    currency: str = "MXN"
+    deadline_hard: Optional[str] = None
+    start_date: Optional[str] = None
+
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    objective: Optional[str] = None
+    budget_estimated: Optional[float] = None
+    currency: Optional[str] = None
+    deadline_hard: Optional[str] = None
+    start_date: Optional[str] = None
+    status: Optional[Literal["draft", "planning", "executing", "closed"]] = None
+    owner_id: Optional[str] = None
+
+
+class WBSTaskCreate(BaseModel):
+    temp_id: Optional[str] = None
+    name: str
+    duration_days: float = 0.0
+    optimistic_days: Optional[float] = None
+    most_likely_days: Optional[float] = None
+    pessimistic_days: Optional[float] = None
+    cost_estimated: float = 0.0
+    is_milestone: bool = False
+
+
+class WBSDependencyCreate(BaseModel):
+    predecessor: str
+    successor: str
+    dep_type: Literal["FS", "SS", "FF", "SF"] = "FS"
+    lag_days: float = 0.0
+
+
+class ProjectFromWBSRequest(BaseModel):
+    organization_id: str
+    name: str
+    objective: Optional[str] = None
+    budget_estimated: Optional[float] = None
+    tasks: List[WBSTaskCreate]
+    dependencies: List[WBSDependencyCreate] = Field(default_factory=list)
+
+
+class TaskCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    duration_days: float = 0.0
+    optimistic_days: Optional[float] = None
+    most_likely_days: Optional[float] = None
+    pessimistic_days: Optional[float] = None
+    cost_estimated: float = 0.0
+    progress_pct: int = 0
+    status: Literal["todo", "in_progress", "blocked", "done"] = "todo"
+    is_milestone: bool = False
+
+
+class TaskUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    duration_days: Optional[float] = None
+    optimistic_days: Optional[float] = None
+    most_likely_days: Optional[float] = None
+    pessimistic_days: Optional[float] = None
+    cost_estimated: Optional[float] = None
+    progress_pct: Optional[int] = None
+    status: Optional[Literal["todo", "in_progress", "blocked", "done"]] = None
+    is_milestone: Optional[bool] = None
+
+
+class DependencyCreate(BaseModel):
+    predecessor_id: str
+    successor_id: str
+    dep_type: Literal["FS", "SS", "FF", "SF"] = "FS"
+    lag_days: float = 0.0
+
+
+class OrganizationCreate(BaseModel):
+    name: str
+
+
+class ProjectSyncRequest(BaseModel):
+    mutations: List[MutationIn] = Field(default_factory=list)
