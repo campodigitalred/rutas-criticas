@@ -9,7 +9,7 @@ sin conexión, igual que el motor CPM y el asistente IA.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from ..cpm import CPMEngine, Dependency, Task

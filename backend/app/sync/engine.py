@@ -38,7 +38,7 @@ El motor es puro (stdlib) y no muta el estado de entrada.
 from __future__ import annotations
 
 import copy
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 EPS = 1e-9
 

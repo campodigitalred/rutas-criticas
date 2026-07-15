@@ -108,9 +108,11 @@ class ProjectRepository(_BaseRepo):
     def list(self, organization_id: Optional[str] = None, status: Optional[str] = None) -> List[dict]:
         clauses, params = [], []
         if organization_id:
-            clauses.append("organization_id = ?"); params.append(organization_id)
+            clauses.append("organization_id = ?")
+            params.append(organization_id)
         if status:
-            clauses.append("status = ?"); params.append(status)
+            clauses.append("status = ?")
+            params.append(status)
         where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
         return rows_to_dicts(self.db.execute(
             f"SELECT * FROM project {where} ORDER BY created_at DESC", tuple(params)

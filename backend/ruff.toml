@@ -1,0 +1,8 @@
+# Configuración de ruff para Campo Crítico (backend).
+line-length = 120
+target-version = "py311"
+
+[lint]
+# Reglas por defecto de ruff: errores de pyflakes (F) y pycodestyle (E4/E7/E9).
+# No se activa E501 (longitud de línea) para no romper por comentarios largos.
+select = ["E4", "E7", "E9", "F"]

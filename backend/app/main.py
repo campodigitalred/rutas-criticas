@@ -41,7 +41,7 @@ from .db import (
     get_database,
     recompute_and_store_cpm,
 )
-from .db.repository import NotFound, RepositoryError
+from .db.repository import NotFound
 from .auth import AuthError, permissions_for
 from .auth.deps import get_auth_service, get_current_user, require_permission
 from .auth.rbac import (

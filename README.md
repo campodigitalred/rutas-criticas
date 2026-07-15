@@ -1,5 +1,7 @@
 # Campo Crítico
 
+[![CI](https://github.com/campodigitalred/rutas-criticas/actions/workflows/ci.yml/badge.svg)](https://github.com/campodigitalred/rutas-criticas/actions/workflows/ci.yml)
+
 > Plataforma web y móvil de **Agencia Campo Digital** que transforma ideas y proyectos
 > (agro, desarrollo rural, transformación digital) en **Rutas Críticas** (CPM/PERT)
 > visuales, automatizadas e inteligentes.
@@ -188,9 +190,18 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
+ruff check app                  # linting
 pytest -v                       # 104/104 pruebas (cores + persistencia + auth)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
+
+### Integración continua (CI)
+
+GitHub Actions ejecuta en cada push y pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+- **Backend** (Python 3.11 y 3.12): `ruff check`, un *smoke test* que importa `app.main`
+  (valida el cableado de FastAPI) y toda la batería `pytest`.
+- **Frontend**: `npm install`, verificación de formato (Prettier, informativa) y `vite build`.
 
 Endpoints implementados:
 - `POST /api/v1/ai/breakdown` — idea en texto → EDT validada + ruta crítica.
