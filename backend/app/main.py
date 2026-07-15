@@ -15,11 +15,19 @@ from .cpm import CPMEngine, CPMError, Dependency, Task
 from .cpm.engine import compute_from_dict
 from .execution import summary_from_dict
 from .execution.metrics import ExecutionError
+from .resources import resource_load_from_dict
+from .resources.allocation import ResourceError
+from .simulation import run_montecarlo_from_dict
+from .simulation.montecarlo import SimulationError
 from .schemas import (
     CPMRequest,
     CPMResponse,
     ExecutionSummaryRequest,
     ExecutionSummaryResponse,
+    MonteCarloRequest,
+    MonteCarloResponse,
+    ResourceLoadRequest,
+    ResourceLoadResponse,
     SimulationRequest,
     SimulationResponse,
     TranscriptionResponse,
@@ -163,3 +171,40 @@ def simulate(req: SimulationRequest) -> SimulationResponse:
         budget_impact=round(budget_impact, 2),
         probability_on_time=round(prob, 4) if prob is not None else None,
     )
+
+
+@app.post("/api/v1/simulation/montecarlo", response_model=MonteCarloResponse, tags=["simulation"])
+def montecarlo(req: MonteCarloRequest) -> MonteCarloResponse:
+    """Simulación Monte Carlo (análisis de riesgo).
+
+    Muestrea las duraciones desde distribuciones Beta-PERT y corre el CPM en cada
+    iteración para estimar la distribución de la fecha final, la probabilidad de
+    cumplir el plazo, el índice de criticidad por tarea y el impacto presupuestal.
+    """
+    try:
+        result = run_montecarlo_from_dict(req.model_dump())
+    except CPMError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except SimulationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return MonteCarloResponse(**result)
+
+
+# --------------------------------------------------------------------------- #
+# Módulo D — Carga de recursos y sobreasignación
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/resources/load", response_model=ResourceLoadResponse, tags=["resources"])
+def resource_load(req: ResourceLoadRequest) -> ResourceLoadResponse:
+    """Perfil de carga diaria por recurso y alertas de sobreasignación.
+
+    Posiciona las tareas en su inicio temprano (CPM), acumula las unidades
+    asignadas por día y por recurso, y reporta los días/ventanas donde la carga
+    supera la capacidad (p.ej. una brigada asignada a dos frentes que se traslapan).
+    """
+    try:
+        result = resource_load_from_dict(req.model_dump())
+    except CPMError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ResourceError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return ResourceLoadResponse(**result)

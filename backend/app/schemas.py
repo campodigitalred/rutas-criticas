@@ -114,3 +114,74 @@ class ExecutionSummaryResponse(BaseModel):
     planned_progress: Optional[float] = None
     schedule_variance_pct: Optional[float] = None
     health: str
+
+
+# --------------------------------------------------------------------------- #
+# Módulo D — Simulación Monte Carlo
+# --------------------------------------------------------------------------- #
+class SimTaskIn(BaseModel):
+    id: str
+    duration: float = 0.0
+    optimistic: Optional[float] = None
+    most_likely: Optional[float] = None
+    pessimistic: Optional[float] = None
+    cost: float = 0.0
+
+
+class MonteCarloRequest(BaseModel):
+    tasks: List[SimTaskIn]
+    dependencies: List[DependencyIn] = Field(default_factory=list)
+    iterations: int = Field(2000, ge=1, le=100000)
+    seed: Optional[int] = None
+    target_duration: Optional[float] = None
+    cost_per_day_delay: float = 0.0
+    histogram_bins: int = Field(20, ge=1, le=100)
+
+
+class MonteCarloResponse(BaseModel):
+    iterations: int
+    seed: Optional[int] = None
+    baseline_duration: float
+    mean: float
+    std_dev: float
+    min: float
+    max: float
+    percentiles: Dict[str, float]
+    probability_on_time: Optional[float] = None
+    target_duration: Optional[float] = None
+    criticality_index: Dict[str, float]
+    histogram: List[dict]
+    expected_cost: Optional[float] = None
+    cost_p80: Optional[float] = None
+
+
+# --------------------------------------------------------------------------- #
+# Módulo D — Carga de recursos
+# --------------------------------------------------------------------------- #
+class ResourceIn(BaseModel):
+    id: str
+    name: str
+    capacity_per_day: float = 1.0
+    cost_per_day: float = 0.0
+    kind: Literal["person", "machinery", "material"] = "person"
+
+
+class AssignmentIn(BaseModel):
+    task_id: str
+    resource_id: str
+    units: float = 1.0
+
+
+class ResourceLoadRequest(BaseModel):
+    tasks: List[ExecutionTaskIn]
+    dependencies: List[DependencyIn] = Field(default_factory=list)
+    resources: List[ResourceIn]
+    assignments: List[AssignmentIn] = Field(default_factory=list)
+
+
+class ResourceLoadResponse(BaseModel):
+    horizon_days: int
+    project_duration: float
+    has_overallocation: bool
+    alerts: List[dict]
+    profiles: List[dict]

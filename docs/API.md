@@ -164,16 +164,82 @@ Salud: `not_started` · `in_progress` · `on_track` · `at_risk` · `behind` · 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET`  | `/resources` · `POST` | Catálogo de personal/maquinaria. |
-| `POST` | `/tasks/{taskId}/assignments` | Asigna recurso a tarea. |
-| `GET`  | `/projects/{id}/resource-load` | Histograma de carga + alertas de sobreasignación. |
+| `POST` | `/resources/load` | **(sin estado)** Perfil de carga diaria por recurso (posicionando las tareas en su inicio temprano CPM) + alertas de sobreasignación por ventanas. |
+| `GET`  | `/resources` · `POST` | Catálogo de personal/maquinaria (persistencia). |
+| `POST` | `/tasks/{taskId}/assignments` | Asigna recurso a tarea (persistencia). |
+| `GET`  | `/projects/{id}/resource-load` | Versión persistida del histograma de carga. |
+
+**Ejemplo — `POST /resources/load`**
+```json
+// Request
+{
+  "tasks": [ { "id": "A", "duration": 10 }, { "id": "B", "duration": 10 } ],
+  "dependencies": [],
+  "resources": [ { "id": "BRIG", "name": "Brigada Norte", "capacity_per_day": 1 } ],
+  "assignments": [
+    { "task_id": "A", "resource_id": "BRIG", "units": 1 },
+    { "task_id": "B", "resource_id": "BRIG", "units": 1 }
+  ]
+}
+
+// Response 200 — A y B se traslapan (ambas inician el día 0) → sobreasignación
+{
+  "horizon_days": 10,
+  "project_duration": 10.0,
+  "has_overallocation": true,
+  "alerts": [
+    {
+      "resource_id": "BRIG", "resource_name": "Brigada Norte",
+      "peak_load": 2.0, "capacity_per_day": 1.0,
+      "overallocated_day_count": 10,
+      "windows": [ { "start": 0, "end": 9 } ],
+      "message": "Brigada Norte sobreasignado: pico 2.0 vs capacidad 1.0 en 10 día(s)."
+    }
+  ],
+  "profiles": [ { "resource_id": "BRIG", "peak_load": 2.0, "load_by_day": [2,2,2,2,2,2,2,2,2,2], "…": "…" } ]
+}
+```
 
 ## Simulación "¿Qué pasaría si...?" (Módulo D)
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET`  | `/projects/{id}/scenarios` · `POST` | Lista/crea escenarios. |
+| `POST` | `/simulation/montecarlo` | **(sin estado)** Simulación Monte Carlo sobre distribuciones Beta-PERT: distribución de la duración, percentiles, probabilidad de cumplir el plazo, **índice de criticidad** por tarea, histograma e impacto presupuestal. Reproducible con `seed`. |
+| `POST` | `/scenarios/simulate` | What-if determinista: aplica *overrides* de duración/costo y compara la red base vs. el escenario. |
+| `GET`  | `/projects/{id}/scenarios` · `POST` | Lista/crea escenarios (persistencia). |
 | `POST` | `/scenarios/{sid}/overrides` | Aplica perturbaciones (p. ej. `+15` días a la fase de campo). |
+
+**Ejemplo — `POST /simulation/montecarlo`**
+```json
+// Request
+{
+  "tasks": [
+    { "id": "T1", "optimistic": 5,  "most_likely": 8,  "pessimistic": 14 },
+    { "id": "T2", "optimistic": 3,  "most_likely": 5,  "pessimistic": 8 },
+    { "id": "T3", "optimistic": 15, "most_likely": 22, "pessimistic": 40 }
+  ],
+  "dependencies": [
+    { "predecessor": "T1", "successor": "T2" },
+    { "predecessor": "T2", "successor": "T3" }
+  ],
+  "iterations": 5000, "seed": 7, "target_duration": 45, "cost_per_day_delay": 500
+}
+
+// Response 200 (valores reales con seed=7, 5000 iteraciones)
+{
+  "iterations": 5000, "seed": 7,
+  "baseline_duration": 37.5,
+  "mean": 37.56, "std_dev": 4.91, "min": 25.56, "max": 53.8,
+  "percentiles": { "p10": 31.33, "p25": 33.88, "p50": 37.21, "p80": 41.92, "p90": 44.36, "p95": 46.02 },
+  "probability_on_time": 0.9186,
+  "criticality_index": { "T1": 1.0, "T2": 1.0, "T3": 1.0 },
+  "histogram": [ { "start": 25.56, "end": 26.97, "count": 14 }, "…" ],
+  "expected_cost": 1017.95, "cost_p80": 2208.67
+}
+```
+
+> El **índice de criticidad** revela tareas “casi críticas”: si una tarea fuera del
+> camino determinista aparece con índice alto (p.ej. 0.4), es un riesgo a vigilar.
 | `POST` | `/scenarios/{sid}/simulate` | Recalcula impacto: nueva fecha final, delta de presupuesto, camino crítico y (opcional) Monte Carlo → probabilidad de cumplir el hito. |
 | `GET`  | `/scenarios/{sid}/compare?vs=baseline` | Comparativa base vs. escenario. |
 

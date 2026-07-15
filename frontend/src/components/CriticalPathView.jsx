@@ -12,6 +12,8 @@
 import React, { useMemo, useRef, useState } from "react";
 import { computeCPM } from "../lib/cpm";
 import KanbanView from "./KanbanView";
+import SimulationView from "./SimulationView";
+import ResourceView from "./ResourceView";
 import "../theme.css";
 
 const DAY_PX = 26; // ancho de un día en el Gantt
@@ -288,9 +290,15 @@ export default function CriticalPathView({
         <button className={`cc-tab ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>
           Kanban de ejecución
         </button>
+        <button className={`cc-tab ${view === "simulation" ? "active" : ""}`} onClick={() => setView("simulation")}>
+          Simulación (riesgo)
+        </button>
+        <button className={`cc-tab ${view === "resources" ? "active" : ""}`} onClick={() => setView("resources")}>
+          Recursos
+        </button>
       </div>
 
-      {view !== "kanban" && <Legend />}
+      {(view === "gantt" || view === "network") && <Legend />}
 
       <div className="cc-panel">
         {result.error ? (
@@ -299,7 +307,7 @@ export default function CriticalPathView({
           <GanttView tasks={tasks} result={result} onDurationChange={handleDurationChange} />
         ) : view === "network" ? (
           <NetworkView tasks={tasks} deps={deps} result={result} />
-        ) : (
+        ) : view === "kanban" ? (
           <KanbanView
             tasks={tasks}
             deps={deps}
@@ -307,6 +315,10 @@ export default function CriticalPathView({
             onStatusChange={handleStatusChange}
             onProgressChange={handleProgressChange}
           />
+        ) : view === "simulation" ? (
+          <SimulationView tasks={tasks} deps={deps} result={result} />
+        ) : (
+          <ResourceView tasks={tasks} deps={deps} />
         )}
       </div>
     </div>

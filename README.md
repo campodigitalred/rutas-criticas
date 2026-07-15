@@ -17,7 +17,7 @@ para técnicos en zonas rurales sin señal.
 | A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | ✅ Implementado (LLM + heurístico offline) |
 | B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
 | C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Implementado (Wizard IA + Red + Gantt + Kanban) |
-| D | Recursos y simulación "¿Qué pasaría si…?" | Endpoint + esquema |
+| D | Recursos y simulación "¿Qué pasaría si…?" | ✅ Implementado (Monte Carlo + sobreasignación) |
 | E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
 
 ## Estructura
@@ -61,6 +61,26 @@ ruta crítica.
   con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
 - Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
 
+## Recursos y simulación de riesgo (Módulo D)
+
+**Simulación Monte Carlo** (`backend/app/simulation/montecarlo.py`): muestrea las duraciones
+desde distribuciones **Beta-PERT** y corre el CPM miles de veces para estimar la distribución
+de la fecha final, los **percentiles** (P50/P80/P90 → compromisos realistas), la **probabilidad
+de cumplir un plazo**, el **índice de criticidad** de cada tarea (detecta cuellos de botella
+“casi críticos” invisibles a un CPM determinista) y el **impacto presupuestal**. Reproducible
+con `seed`. La vista `SimulationView` incluye el escenario *“¿Qué pasaría si…?”* (p.ej. *las
+lluvias retrasan la fase de campo 15 días*) mostrando el desplazamiento de la distribución y el costo.
+
+**Gestión de recursos** (`backend/app/resources/allocation.py`): posiciona las tareas en su
+inicio temprano (CPM), acumula la carga diaria por recurso (personal/maquinaria) y **detecta la
+sobreasignación** (carga > capacidad), agrupándola en ventanas y generando alertas. La vista
+`ResourceView` permite reasignar tareas y ajustar capacidades para resolver los conflictos.
+
+- Endpoints: `POST /api/v1/simulation/montecarlo`, `POST /api/v1/resources/load`.
+- Espejos JS: `montecarlo.js` (PRNG con semilla; converge a la misma distribución) y
+  `resourceLoad.js` (paridad exacta con el backend).
+- Núcleos puros → verificables con `pytest`.
+
 ## Interfaz visual e interactiva (Módulo C)
 
 Tres vistas del mismo proyecto, todas dependency-free (React + SVG + CSS del sistema
@@ -100,7 +120,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 29/29 pruebas (motor CPM + asistente IA + ejecución)
+pytest -v                       # 50/50 pruebas (CPM + IA + ejecución + Monte Carlo + recursos)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -109,7 +129,9 @@ Endpoints implementados:
 - `POST /api/v1/ai/transcribe` — nota de voz → texto (interfaz Whisper).
 - `POST /api/v1/cpm/preview` — recálculo sin persistir (Gantt en tiempo real).
 - `POST /api/v1/execution/summary` — resumen de ejecución/salud para el Kanban.
-- `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?".
+- `POST /api/v1/simulation/montecarlo` — análisis de riesgo Monte Carlo.
+- `POST /api/v1/resources/load` — carga de recursos + alertas de sobreasignación.
+- `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
 - `GET /health`.
 
 Para activar el LLM real:

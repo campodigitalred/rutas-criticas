@@ -188,3 +188,35 @@ body {
 @media (max-width: 820px) {
   .cc-kanban { grid-template-columns: repeat(2, 1fr); }
 }
+
+
+/* ---- Simulación (Monte Carlo) y Recursos (Módulo D) ---- */
+.cc-section-title { font-size: 15px; margin: 18px 0 8px; color: var(--cc-gray-900); }
+.cc-sim-controls { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 14px; }
+.cc-sim-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--cc-gray-500); }
+.cc-sim-controls select.cc-input { width: auto; }
+
+.cc-hist { background: var(--cc-gray-100); border-radius: 8px; padding: 8px; }
+.cc-whatif { background: #fff8e1; border: 1px solid #f3e3a2; border-radius: 10px; padding: 14px 16px; margin: 18px 0; }
+.cc-whatif .cc-section-title { margin-top: 0; }
+
+.cc-ci-bar { height: 12px; background: #e6ebf1; border-radius: 6px; overflow: hidden; }
+.cc-ci-fill { height: 100%; border-radius: 6px; transition: width .2s; }
+
+.cc-alert-danger {
+  background: #fdece6; border-left: 4px solid var(--cc-critical); border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; margin-bottom: 8px; color: #8a2b12;
+}
+.cc-alert-ok {
+  background: #eef7f0; border-left: 4px solid var(--cc-green-600); border-radius: 8px;
+  padding: 10px 14px; font-size: 13px; margin-bottom: 8px; color: var(--cc-green-900);
+}
+
+.cc-resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+.cc-resource-card { background: var(--cc-gray-100); border-radius: 10px; padding: 12px; border: 2px solid transparent; }
+.cc-resource-card.over { border-color: var(--cc-critical); }
+.cc-resource-head { display: flex; align-items: center; justify-content: space-between; font-size: 14px; margin-bottom: 6px; }
+.cc-cap-label { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--cc-gray-500); }
+.cc-cap-label input { width: 48px; padding: 3px 6px; border: 1px solid #d7dee7; border-radius: 6px; font: inherit; }
+.cc-loadstrip { background: var(--cc-white); border-radius: 6px; }
+.cc-resource-meta { font-size: 12px; color: var(--cc-gray-500); margin-top: 4px; }
