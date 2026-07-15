@@ -220,3 +220,18 @@ body {
 .cc-cap-label input { width: 48px; padding: 3px 6px; border: 1px solid #d7dee7; border-radius: 6px; font: inherit; }
 .cc-loadstrip { background: var(--cc-white); border-radius: 6px; }
 .cc-resource-meta { font-size: 12px; color: var(--cc-gray-500); margin-top: 4px; }
+
+
+/* ---- Dashboard EVM y exportación (Módulo E) ---- */
+.cc-export-bar {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--cc-gray-100); border-radius: 10px; padding: 10px 14px; margin-bottom: 16px;
+}
+.cc-export-bar > span { font-size: 13px; color: var(--cc-gray-500); font-weight: 600; }
+.cc-export-bar .cc-btn { padding: 7px 14px; font-size: 13px; }
+.cc-scurve { background: var(--cc-white); border: 1px solid #eef2f6; border-radius: 8px; }
+
+@media print {
+  .cc-tabs, .cc-export-bar, .cc-exec-asof { display: none !important; }
+  .cc-panel { box-shadow: none; }
+}

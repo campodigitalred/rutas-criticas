@@ -185,3 +185,61 @@ class ResourceLoadResponse(BaseModel):
     has_overallocation: bool
     alerts: List[dict]
     profiles: List[dict]
+
+
+# --------------------------------------------------------------------------- #
+# Módulo E — Dashboard EVM y exportadores
+# --------------------------------------------------------------------------- #
+class EVMTaskIn(BaseModel):
+    id: str
+    duration: float = 0.0
+    planned_cost: float = 0.0
+    progress_pct: float = 0.0
+    actual_cost: float = 0.0
+
+
+class EVMRequest(BaseModel):
+    tasks: List[EVMTaskIn]
+    dependencies: List[DependencyIn] = Field(default_factory=list)
+    as_of_day: Optional[float] = None
+
+
+class EVMResponse(BaseModel):
+    as_of_day: Optional[float] = None
+    project_duration: float
+    bac: float
+    ev: float
+    ac: float
+    pv: Optional[float] = None
+    sv: Optional[float] = None
+    cv: float
+    spi: Optional[float] = None
+    cpi: Optional[float] = None
+    eac: Optional[float] = None
+    etc: Optional[float] = None
+    vac: Optional[float] = None
+    tcpi: Optional[float] = None
+    percent_complete: float
+    percent_spent: float
+    health: str
+    pv_curve: List[dict]
+
+
+class ExportTaskIn(BaseModel):
+    id: str
+    name: Optional[str] = None
+    duration: float = 0.0
+    optimistic: Optional[float] = None
+    most_likely: Optional[float] = None
+    pessimistic: Optional[float] = None
+    planned_cost: float = 0.0
+    progress_pct: float = 0.0
+    is_milestone: bool = False
+
+
+class ExportRequest(BaseModel):
+    tasks: List[ExportTaskIn]
+    dependencies: List[DependencyIn] = Field(default_factory=list)
+    project_name: str = "Campo Crítico"
+    project_id: str = "CC1"
+    start_date: Optional[str] = None

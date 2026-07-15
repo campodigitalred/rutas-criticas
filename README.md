@@ -18,7 +18,7 @@ para técnicos en zonas rurales sin señal.
 | B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
 | C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Implementado (Wizard IA + Red + Gantt + Kanban) |
 | D | Recursos y simulación "¿Qué pasaría si…?" | ✅ Implementado (Monte Carlo + sobreasignación) |
-| E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
+| E | Exportación (CSV/MS Project/P6, PNG/PDF) y Dashboard EVM | ✅ Implementado |
 
 ## Estructura
 
@@ -60,6 +60,24 @@ ruta crítica.
 - Frontend: `frontend/src/components/IdeaIntakeWizard.jsx` (idea → EDT editable → ruta),
   con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
 - Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
+
+## Exportación y reportes (Módulo E)
+
+**Dashboard de Valor Ganado (EVM)** (`backend/app/reporting/evm.py`): combina el cronograma
+CPM con costos, avance y costo real para calcular **BAC/PV/EV/AC**, variaciones **SV/CV**,
+índices **SPI/CPI**, proyecciones **EAC/ETC/VAC/TCPI**, % avance/gastado y una **señal de salud**,
+más la **curva S** (PV planeado vs. EV/AC a la fecha). La vista `DashboardView` la grafica y
+recalcula en vivo al editar los costos.
+
+**Exportadores profesionales** (`backend/app/reporting/exporters.py`), deterministas y sin
+dependencias externas:
+- **MS Project (MSPDI XML)** — con mapeo de dependencias FS/SS/FF/SF y *lag*.
+- **Primavera P6 (XER)** — tablas PROJECT/TASK/TASKPRED.
+- **CSV** — compatible con Excel (ES/EF/holgura/crítica/predecesoras/costo).
+- **PNG** del gráfico (SVG→canvas) e **impresión a PDF** (`window.print()`) desde el cliente.
+
+- Endpoints: `POST /api/v1/reporting/evm`, `/export/csv`, `/export/msproject`, `/export/p6`.
+- Espejos JS (`evm.js`, `exporters.js`) con **paridad exacta**; incluyen la descarga en navegador.
 
 ## Recursos y simulación de riesgo (Módulo D)
 
@@ -120,7 +138,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 50/50 pruebas (CPM + IA + ejecución + Monte Carlo + recursos)
+pytest -v                       # 67/67 pruebas (CPM + IA + ejecución + Monte Carlo + recursos + EVM + export)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -131,6 +149,8 @@ Endpoints implementados:
 - `POST /api/v1/execution/summary` — resumen de ejecución/salud para el Kanban.
 - `POST /api/v1/simulation/montecarlo` — análisis de riesgo Monte Carlo.
 - `POST /api/v1/resources/load` — carga de recursos + alertas de sobreasignación.
+- `POST /api/v1/reporting/evm` — dashboard de Valor Ganado (EVM).
+- `POST /api/v1/export/{csv,msproject,p6}` — exportadores profesionales.
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
 - `GET /health`.
 

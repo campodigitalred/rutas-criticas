@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 
 from .ai import BreakdownService
 from .ai.schemas import BreakdownRequest, BreakdownResult
@@ -15,6 +16,13 @@ from .cpm import CPMEngine, CPMError, Dependency, Task
 from .cpm.engine import compute_from_dict
 from .execution import summary_from_dict
 from .execution.metrics import ExecutionError
+from .reporting import (
+    evm_from_dict,
+    export_csv_from_dict,
+    export_msproject_from_dict,
+    export_p6_xer_from_dict,
+)
+from .reporting.evm import EVMError
 from .resources import resource_load_from_dict
 from .resources.allocation import ResourceError
 from .simulation import run_montecarlo_from_dict
@@ -22,8 +30,11 @@ from .simulation.montecarlo import SimulationError
 from .schemas import (
     CPMRequest,
     CPMResponse,
+    EVMRequest,
+    EVMResponse,
     ExecutionSummaryRequest,
     ExecutionSummaryResponse,
+    ExportRequest,
     MonteCarloRequest,
     MonteCarloResponse,
     ResourceLoadRequest,
@@ -208,3 +219,60 @@ def resource_load(req: ResourceLoadRequest) -> ResourceLoadResponse:
     except ResourceError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     return ResourceLoadResponse(**result)
+
+
+# --------------------------------------------------------------------------- #
+# Módulo E — Dashboard EVM y exportadores
+# --------------------------------------------------------------------------- #
+@app.post("/api/v1/reporting/evm", response_model=EVMResponse, tags=["reporting"])
+def reporting_evm(req: EVMRequest) -> EVMResponse:
+    """Dashboard de Valor Ganado (EVM): BAC/PV/EV/AC, SPI/CPI, EAC/VAC, salud y curva S."""
+    try:
+        result = evm_from_dict(req.model_dump())
+    except CPMError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except EVMError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return EVMResponse(**result)
+
+
+@app.post("/api/v1/export/msproject", tags=["reporting"])
+def export_msproject(req: ExportRequest) -> Response:
+    """Exporta la ruta crítica a MS Project (MSPDI XML)."""
+    try:
+        xml = export_msproject_from_dict(req.model_dump())
+    except (CPMError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return Response(
+        content=xml,
+        media_type="application/xml",
+        headers={"Content-Disposition": "attachment; filename=campo-critico.xml"},
+    )
+
+
+@app.post("/api/v1/export/p6", tags=["reporting"])
+def export_p6(req: ExportRequest) -> Response:
+    """Exporta la ruta crítica a Primavera P6 (XER)."""
+    try:
+        xer = export_p6_xer_from_dict(req.model_dump())
+    except (CPMError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return Response(
+        content=xer,
+        media_type="text/plain",
+        headers={"Content-Disposition": "attachment; filename=campo-critico.xer"},
+    )
+
+
+@app.post("/api/v1/export/csv", tags=["reporting"])
+def export_csv(req: ExportRequest) -> Response:
+    """Exporta la ruta crítica a CSV (compatible con Excel)."""
+    try:
+        data = export_csv_from_dict(req.model_dump())
+    except (CPMError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return Response(
+        content=data,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=campo-critico.csv"},
+    )

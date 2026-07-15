@@ -14,6 +14,7 @@ import { computeCPM } from "../lib/cpm";
 import KanbanView from "./KanbanView";
 import SimulationView from "./SimulationView";
 import ResourceView from "./ResourceView";
+import DashboardView from "./DashboardView";
 import "../theme.css";
 
 const DAY_PX = 26; // ancho de un día en el Gantt
@@ -296,6 +297,9 @@ export default function CriticalPathView({
         <button className={`cc-tab ${view === "resources" ? "active" : ""}`} onClick={() => setView("resources")}>
           Recursos
         </button>
+        <button className={`cc-tab ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}>
+          Dashboard / EVM
+        </button>
       </div>
 
       {(view === "gantt" || view === "network") && <Legend />}
@@ -317,8 +321,10 @@ export default function CriticalPathView({
           />
         ) : view === "simulation" ? (
           <SimulationView tasks={tasks} deps={deps} result={result} />
-        ) : (
+        ) : view === "resources" ? (
           <ResourceView tasks={tasks} deps={deps} />
+        ) : (
+          <DashboardView tasks={tasks} deps={deps} />
         )}
       </div>
     </div>

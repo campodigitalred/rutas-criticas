@@ -247,12 +247,43 @@ Salud: `not_started` · `in_progress` · `on_track` · `at_risk` · `behind` · 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/projects/{id}/export/pdf` | PDF ejecutivo. |
-| `GET` | `/projects/{id}/export/png` | Diagrama PNG. |
-| `GET` | `/projects/{id}/export/xlsx` | Hoja de cálculo. |
-| `GET` | `/projects/{id}/export/msproject` | XML compatible con MS Project. |
-| `GET` | `/projects/{id}/export/p6` | XML/XER compatible con Primavera P6. |
-| `GET` | `/projects/{id}/dashboard/evm` | Métricas EVM: PV, EV, AC, CPI, SPI, % avance, salud. |
+| `POST` | `/reporting/evm` | **(sin estado)** Dashboard de Valor Ganado: BAC/PV/EV/AC, SV/CV, SPI/CPI, EAC/ETC/VAC/TCPI, % avance/gastado, salud y curva S. |
+| `POST` | `/export/csv` | Exporta la ruta crítica a CSV (compatible con Excel). |
+| `POST` | `/export/msproject` | Exporta a MS Project (MSPDI XML). |
+| `POST` | `/export/p6` | Exporta a Primavera P6 (XER). |
+| `GET`  | `/projects/{id}/export/pdf` · `/png` | PDF ejecutivo / diagrama PNG (render en cliente; `window.print()` y `<svg>`→canvas). |
+
+**Ejemplo — `POST /reporting/evm`**
+```json
+// Request
+{
+  "tasks": [
+    { "id": "T1", "duration": 8,  "planned_cost": 1000, "progress_pct": 100, "actual_cost": 1100 },
+    { "id": "T2", "duration": 20, "planned_cost": 5000, "progress_pct": 30,  "actual_cost": 1800 },
+    { "id": "T3", "duration": 10, "planned_cost": 2000, "progress_pct": 0,   "actual_cost": 0 }
+  ],
+  "dependencies": [
+    { "predecessor": "T1", "successor": "T2" },
+    { "predecessor": "T2", "successor": "T3" }
+  ],
+  "as_of_day": 15
+}
+
+// Response 200 (valores verificados)
+{
+  "bac": 8000.0, "pv": 2750.0, "ev": 2500.0, "ac": 2900.0,
+  "sv": -250.0, "cv": -400.0, "spi": 0.9091, "cpi": 0.8621,
+  "eac": 9280.0, "etc": 6380.0, "vac": -1280.0, "tcpi": 1.0784,
+  "percent_complete": 31.25, "percent_spent": 36.25,
+  "health": "at_risk",
+  "pv_curve": [ { "day": 0, "pv": 0.0 }, { "day": 15, "pv": 2750.0, "ev": 2500.0, "ac": 2900.0 }, "…" ]
+}
+```
+
+> Interpretación: `SPI 0.91` (algo atrasado) y `CPI 0.86` (sobrecosto) → salud `at_risk`;
+> `EAC 9280 > BAC 8000` proyecta un sobrecosto de `VAC −1280` si la tendencia continúa.
+> Los exportadores (`/export/*`) aceptan el mismo cuerpo de `tasks`/`dependencies` (más
+> `project_name`, `project_id`, `start_date`) y devuelven el archivo con `Content-Disposition`.
 
 ## Sincronización offline
 
