@@ -111,6 +111,55 @@ Convenciones: `200/201` éxito, `400` validación, `401/403` auth, `404` no exis
 }
 ```
 
+## Seguimiento de ejecución — Kanban (Módulo C)
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/execution/summary` | Resumen de ejecución para el tablero Kanban: corre el CPM y devuelve avance real (ponderado por duración), avance del camino crítico, conteos por estado, avance planeado a la fecha, varianza de cronograma y salud del proyecto. |
+
+Estados de tarea: `todo` · `in_progress` · `blocked` · `done`.
+Salud: `not_started` · `in_progress` · `on_track` · `at_risk` · `behind` · `done`.
+
+**Ejemplo — `POST /execution/summary`**
+```json
+// Request
+{
+  "tasks": [
+    { "id": "T1", "duration": 8,  "status": "done",        "progress_pct": 100 },
+    { "id": "T2", "duration": 5,  "status": "done",        "progress_pct": 100 },
+    { "id": "T3", "duration": 20, "status": "in_progress", "progress_pct": 30 },
+    { "id": "T5", "duration": 10, "status": "blocked",     "progress_pct": 0 }
+  ],
+  "dependencies": [
+    { "predecessor": "T1", "successor": "T2", "dep_type": "FS", "lag": 0 },
+    { "predecessor": "T2", "successor": "T3", "dep_type": "FS", "lag": 0 },
+    { "predecessor": "T3", "successor": "T5", "dep_type": "FS", "lag": 0 }
+  ],
+  "as_of_day": 20
+}
+
+// Response 200
+{
+  "total_tasks": 4,
+  "status_counts": { "todo": 0, "in_progress": 1, "blocked": 1, "done": 2 },
+  "overall_progress": 44.19,
+  "critical_progress": 44.19,
+  "blocked_count": 1,
+  "critical_blocked": true,
+  "project_duration": 43.0,
+  "critical_path": ["T1", "T2", "T3", "T5"],
+  "as_of_day": 20.0,
+  "planned_progress": 46.51,
+  "schedule_variance_pct": -2.32,
+  "health": "at_risk"
+}
+```
+
+> Las fechas y el camino crítico provienen del motor CPM. Nótese que aunque la
+> varianza de cronograma es pequeña (−2.32 pp), la salud es `at_risk` porque una
+> **tarea crítica está bloqueada** (T5): esa condición eleva la salud al menos a
+> `at_risk`.
+
 ## Recursos y sobreasignación (Módulo D)
 
 | Método | Ruta | Descripción |

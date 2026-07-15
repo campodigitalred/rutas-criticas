@@ -79,3 +79,38 @@ class TranscriptionResponse(BaseModel):
     text: str
     language: Optional[str] = None
     duration_seconds: Optional[float] = None
+
+
+# --------------------------------------------------------------------------- #
+# Módulo C — Seguimiento de ejecución (Kanban)
+# --------------------------------------------------------------------------- #
+TaskStatus = Literal["todo", "in_progress", "blocked", "done"]
+
+
+class ExecutionTaskIn(BaseModel):
+    id: str
+    duration: float = 0.0
+    progress_pct: float = 0.0
+    status: TaskStatus = "todo"
+
+
+class ExecutionSummaryRequest(BaseModel):
+    tasks: List[ExecutionTaskIn]
+    dependencies: List[DependencyIn] = Field(default_factory=list)
+    # Día del proyecto (0 = inicio) para evaluar avance planeado y salud.
+    as_of_day: Optional[float] = None
+
+
+class ExecutionSummaryResponse(BaseModel):
+    total_tasks: int
+    status_counts: Dict[str, int]
+    overall_progress: float
+    critical_progress: float
+    blocked_count: int
+    critical_blocked: bool
+    project_duration: float
+    critical_path: List[str]
+    as_of_day: Optional[float] = None
+    planned_progress: Optional[float] = None
+    schedule_variance_pct: Optional[float] = None
+    health: str

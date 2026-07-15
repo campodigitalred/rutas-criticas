@@ -13,9 +13,13 @@ from .ai import BreakdownService
 from .ai.schemas import BreakdownRequest, BreakdownResult
 from .cpm import CPMEngine, CPMError, Dependency, Task
 from .cpm.engine import compute_from_dict
+from .execution import summary_from_dict
+from .execution.metrics import ExecutionError
 from .schemas import (
     CPMRequest,
     CPMResponse,
+    ExecutionSummaryRequest,
+    ExecutionSummaryResponse,
     SimulationRequest,
     SimulationResponse,
     TranscriptionResponse,
@@ -104,6 +108,31 @@ async def ai_transcribe(file: UploadFile = File(...)) -> TranscriptionResponse:
             "de speech-to-text (Whisper) para activar /ai/transcribe."
         ),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Módulo C — Seguimiento de ejecución (Kanban)
+# --------------------------------------------------------------------------- #
+@app.post(
+    "/api/v1/execution/summary",
+    response_model=ExecutionSummaryResponse,
+    tags=["execution"],
+)
+def execution_summary(req: ExecutionSummaryRequest) -> ExecutionSummaryResponse:
+    """Resumen de ejecución para el tablero Kanban.
+
+    A partir del estado/avance de las tareas y la red de dependencias, corre el
+    motor CPM y calcula: avance real ponderado por duración, avance del camino
+    crítico, conteos por estado, avance planeado a la fecha (`as_of_day`),
+    varianza de cronograma y una señal de salud del proyecto.
+    """
+    try:
+        result = summary_from_dict(req.model_dump())
+    except CPMError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    except ExecutionError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    return ExecutionSummaryResponse(**result)
 
 
 @app.post("/api/v1/scenarios/simulate", response_model=SimulationResponse, tags=["simulation"])

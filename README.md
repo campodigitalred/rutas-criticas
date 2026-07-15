@@ -16,7 +16,7 @@ para técnicos en zonas rurales sin señal.
 |---|---|---|
 | A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | ✅ Implementado (LLM + heurístico offline) |
 | B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
-| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Prototipo React (Wizard IA + Red + Gantt) |
+| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Implementado (Wizard IA + Red + Gantt + Kanban) |
 | D | Recursos y simulación "¿Qué pasaría si…?" | Endpoint + esquema |
 | E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
 
@@ -61,6 +61,26 @@ ruta crítica.
   con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
 - Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
 
+## Interfaz visual e interactiva (Módulo C)
+
+Tres vistas del mismo proyecto, todas dependency-free (React + SVG + CSS del sistema
+de diseño) con recálculo en el cliente:
+
+- **Diagrama de Red (PERT)** — nodos por capas y aristas de dependencia con etiqueta de tipo/lag.
+- **Gantt dinámico** — barras arrastrables (ajustar duración) que recalculan la ruta al instante.
+- **Kanban de ejecución** — seguimiento diario con **arrastrar y soltar nativo** (HTML5) entre
+  columnas de estado (Por hacer / En progreso / Bloqueada / Completada), control de avance por
+  tarjeta y resaltado del camino crítico.
+
+La cabecera del Kanban muestra la **salud del proyecto** calculada por el núcleo de métricas
+de ejecución (`backend/app/execution/metrics.py`, espejo JS en `frontend/src/lib/execution.js`):
+avance real ponderado por duración, avance del camino crítico, avance planeado a la fecha
+(`as_of_day`), varianza de cronograma y una señal (`on_track` / `at_risk` / `behind`…). Una
+tarea crítica bloqueada eleva la salud al menos a `at_risk`.
+
+- Endpoint: `POST /api/v1/execution/summary`.
+- Núcleo puro (dataclasses) → verificable con `pytest`; paridad Python ↔ JavaScript verificada.
+
 ## El motor CPM/PERT (núcleo)
 
 Implementado **dos veces con paridad de resultados**: en Python (`backend/app/cpm/engine.py`)
@@ -80,7 +100,7 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 18/18 pruebas (motor CPM + asistente IA)
+pytest -v                       # 29/29 pruebas (motor CPM + asistente IA + ejecución)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
@@ -88,6 +108,7 @@ Endpoints implementados:
 - `POST /api/v1/ai/breakdown` — idea en texto → EDT validada + ruta crítica.
 - `POST /api/v1/ai/transcribe` — nota de voz → texto (interfaz Whisper).
 - `POST /api/v1/cpm/preview` — recálculo sin persistir (Gantt en tiempo real).
+- `POST /api/v1/execution/summary` — resumen de ejecución/salud para el Kanban.
 - `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?".
 - `GET /health`.
 

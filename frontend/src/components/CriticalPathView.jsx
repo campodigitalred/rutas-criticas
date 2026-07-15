@@ -11,6 +11,7 @@
  */
 import React, { useMemo, useRef, useState } from "react";
 import { computeCPM } from "../lib/cpm";
+import KanbanView from "./KanbanView";
 import "../theme.css";
 
 const DAY_PX = 26; // ancho de un día en el Gantt
@@ -24,6 +25,13 @@ const DEMO_TASKS = [
   { id: "T5", name: "Validación y limpieza de datos", duration: 10 },
   { id: "T6", name: "Informe y entrega", duration: 4 },
 ];
+
+/** Estado/avance por defecto para una tarea que llega sin datos de ejecución. */
+const withExecutionDefaults = (t) => ({
+  status: "todo",
+  progress_pct: 0,
+  ...t,
+});
 
 const DEMO_DEPS = [
   { predecessor: "T1", successor: "T2", dep_type: "FS", lag: 0 },
@@ -210,7 +218,7 @@ export default function CriticalPathView({
   initialTasks = DEMO_TASKS,
   initialDeps = DEMO_DEPS,
 }) {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(() => initialTasks.map(withExecutionDefaults));
   const [deps] = useState(initialDeps);
   const [view, setView] = useState("gantt");
 
@@ -227,7 +235,29 @@ export default function CriticalPathView({
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, duration } : t)));
   }
 
-  const prob = result.pert_std_dev > 0 ? "≈ calc. PERT" : "determinista";
+  function handleStatusChange(id, status) {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, status, progress_pct: status === "done" ? 100 : t.progress_pct }
+          : t
+      )
+    );
+  }
+
+  function handleProgressChange(id, progress_pct) {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        // El avance ajusta el estado de forma coherente.
+        let status = t.status;
+        if (progress_pct >= 100) status = "done";
+        else if (progress_pct > 0 && status === "todo") status = "in_progress";
+        else if (progress_pct < 100 && status === "done") status = "in_progress";
+        return { ...t, progress_pct, status };
+      })
+    );
+  }
 
   return (
     <div className="cc-app">
@@ -255,17 +285,28 @@ export default function CriticalPathView({
         <button className={`cc-tab ${view === "network" ? "active" : ""}`} onClick={() => setView("network")}>
           Diagrama de Red (PERT)
         </button>
+        <button className={`cc-tab ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>
+          Kanban de ejecución
+        </button>
       </div>
 
-      <Legend />
+      {view !== "kanban" && <Legend />}
 
       <div className="cc-panel">
         {result.error ? (
           <p style={{ color: "var(--cc-critical)" }}>Error: {result.error}</p>
         ) : view === "gantt" ? (
           <GanttView tasks={tasks} result={result} onDurationChange={handleDurationChange} />
-        ) : (
+        ) : view === "network" ? (
           <NetworkView tasks={tasks} deps={deps} result={result} />
+        ) : (
+          <KanbanView
+            tasks={tasks}
+            deps={deps}
+            result={result}
+            onStatusChange={handleStatusChange}
+            onProgressChange={handleProgressChange}
+          />
         )}
       </div>
     </div>
