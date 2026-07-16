@@ -1,5 +1,7 @@
 # Campo Crítico
 
+[![CI](https://github.com/campodigitalred/rutas-criticas/actions/workflows/ci.yml/badge.svg)](https://github.com/campodigitalred/rutas-criticas/actions/workflows/ci.yml)
+
 > Plataforma web y móvil de **Agencia Campo Digital** que transforma ideas y proyectos
 > (agro, desarrollo rural, transformación digital) en **Rutas Críticas** (CPM/PERT)
 > visuales, automatizadas e inteligentes.
@@ -14,11 +16,11 @@ para técnicos en zonas rurales sin señal.
 
 | # | Módulo | Estado en este repo |
 |---|---|---|
-| A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | Especificado + endpoints |
+| A | Ingreso inteligente (IA de desglose EDT, formulario estructurado) | ✅ Implementado (LLM + heurístico offline) |
 | B | **Motor de Ruta Crítica CPM/PERT** | ✅ Implementado y probado |
-| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Prototipo React (Red + Gantt) |
-| D | Recursos y simulación "¿Qué pasaría si…?" | Endpoint + esquema |
-| E | Exportación (PDF/PNG/XLSX/MS Project/P6) y EVM | Especificado |
+| C | Interfaz visual (Red PERT, Gantt, Kanban) | ✅ Implementado (Wizard IA + Red + Gantt + Kanban) |
+| D | Recursos y simulación "¿Qué pasaría si…?" | ✅ Implementado (Monte Carlo + sobreasignación) |
+| E | Exportación (CSV/MS Project/P6, PNG/PDF) y Dashboard EVM | ✅ Implementado |
 
 ## Estructura
 
@@ -30,15 +32,144 @@ rutas-criticas/
 │   └── API.md            # Endpoints REST
 ├── db/
 │   └── schema.sql        # Esquema PostgreSQL
-├── backend/              # FastAPI + motor CPM/PERT (Python)
-│   ├── app/cpm/engine.py # Núcleo del algoritmo
+├── backend/              # FastAPI + núcleos Python
+│   ├── app/cpm/          # Motor CPM/PERT (núcleo)
+│   ├── app/ai/           # Asistente IA de desglose
+│   ├── app/execution/    # Métricas de ejecución (Kanban)
+│   ├── app/simulation/   # Monte Carlo
+│   ├── app/resources/    # Carga y sobreasignación de recursos
+│   ├── app/reporting/    # EVM y exportadores (MS Project/P6/CSV)
+│   ├── app/sync/         # Sincronización offline (LWW a nivel de campo)
+│   ├── app/auth/         # Autenticación JWT + RBAC (roles/permisos)
+│   ├── app/db/           # Persistencia: repositorios sqlite3 + ORM PostgreSQL
 │   ├── app/main.py       # API
-│   └── tests/            # 10 pruebas del motor (pytest)
+│   └── tests/            # 90 pruebas (pytest)
 └── frontend/             # Prototipo React (Vite)
     └── src/
-        ├── lib/cpm.js                       # Motor CPM/PERT en JS (offline/tiempo real)
-        └── components/CriticalPathView.jsx  # Vista de Ruta Crítica (Red PERT + Gantt)
+        ├── lib/          # Motores en JS (cpm, ai, execution, montecarlo, evm, sync…)
+        └── components/   # Wizard, Ruta Crítica, Kanban, Simulación, Recursos, Dashboard
 ```
+
+## Asistente IA de desglose (Módulo A)
+
+Convierte una idea en texto libre en una EDT/WBS validada, lista para el motor CPM.
+Arquitectura de proveedores intercambiables:
+
+- **`OpenAICompatibleProvider`** — llama a un LLM real (config por entorno
+  `CAMPO_LLM_API_KEY`, `CAMPO_LLM_BASE_URL`, `CAMPO_LLM_MODEL`).
+- **`HeuristicProvider`** — genera la EDT **sin conexión** con plantillas de dominio
+  (censo/datos, software, capacitación, agrícola, genérico) y detección de plazo
+  («3 meses» → 90 días). Es el respaldo cuando no hay red/API key.
+
+El orquestador (`backend/app/ai/breakdown.py`) valida la salida contra el esquema,
+la pasa por el motor CPM (**rechaza ciclos y referencias colgantes**) y **escala las
+duraciones** para caber en el horizonte objetivo. Devuelve la EDT + vista previa de
+ruta crítica.
+
+- Endpoints: `POST /api/v1/ai/breakdown`, `POST /api/v1/ai/transcribe` (interfaz Whisper).
+- Frontend: `frontend/src/components/IdeaIntakeWizard.jsx` (idea → EDT editable → ruta),
+  con espejo JS del generador en `frontend/src/lib/aiBreakdown.js`.
+- Núcleo puro (dataclasses, sin dependencias externas) → verificable con `pytest`.
+
+## Autenticación y control de acceso (RBAC)
+
+Autenticación con **JWT HS256** y contraseñas **PBKDF2-HMAC-SHA256** (con sal, 200k iteraciones),
+implementadas solo con la biblioteca estándar (`backend/app/auth/`) → verificables sin
+dependencias. En producción pueden sustituirse por PyJWT/passlib manteniendo el contrato.
+
+- **Roles**: `admin`, `director`, `consultor`, `aliado` (aliado rural: lectura + ejecución de
+  tareas en campo). Cada endpoint exige un **permiso** (`project:write`, `project:delete`,
+  `task:execute`, `user:manage`, …) mediante la dependencia `require_permission`.
+- `AuthService`: registro (organización + admin), alta de usuarios con rol, autenticación en
+  **tiempo constante** (sin enumeración de usuarios) y emisión/verificación de tokens.
+- Endpoints: `POST /auth/register`, `/auth/login`, `GET /auth/me`, `POST /auth/users`.
+- Frontend: `authClient.js` (token en localStorage, decodificación de claims, **espejo de
+  permisos**), `LoginView` y gateo de la UI por rol (el `aliado` no planifica; ejecuta en campo).
+
+```bash
+export CAMPO_JWT_SECRET="una-clave-larga-y-secreta"   # firmar/verificar JWT en producción
+```
+
+## Persistencia
+
+Acceso a datos real con una **capa de repositorios** (`backend/app/db/`) que ejecuta SQL
+parametrizado. En este repositorio corre sobre **`sqlite3`** (biblioteca estándar → verificable
+sin dependencias), y en **producción** apunta a **PostgreSQL** mediante los modelos ORM
+SQLAlchemy (`app/db/models_orm.py`) que reflejan `db/schema.sql`.
+
+- `schema_sqlite.sql` refleja el esquema PostgreSQL (UUID→TEXT, enums→CHECK, JSONB→TEXT…), con
+  **claves foráneas en cascada** y restricciones (`progress` 0–100, sin auto-dependencia, un solo
+  baseline por proyecto).
+- Repositorios: Organization, User, Project, Task, Dependency, Resource, Scenario, CpmResult.
+- Servicios que **unen persistencia y núcleos**: crear proyecto desde una EDT, **recalcular y
+  guardar** la ruta crítica (`cpm_result`), construir el snapshot y **aplicar la sincronización
+  offline persistiendo los cambios**.
+- Endpoints REST de CRUD + `/cpm/compute`, `/snapshot`, `/sync` por proyecto.
+
+```bash
+# Producción: apuntar a PostgreSQL
+export DATABASE_URL=postgresql+psycopg://user:pass@host/campo_critico
+python -c "from sqlalchemy import create_engine; from app.db.models_orm import Base; \
+Base.metadata.create_all(create_engine('$DATABASE_URL'))"   # o Alembic
+```
+
+## Exportación y reportes (Módulo E)
+
+**Dashboard de Valor Ganado (EVM)** (`backend/app/reporting/evm.py`): combina el cronograma
+CPM con costos, avance y costo real para calcular **BAC/PV/EV/AC**, variaciones **SV/CV**,
+índices **SPI/CPI**, proyecciones **EAC/ETC/VAC/TCPI**, % avance/gastado y una **señal de salud**,
+más la **curva S** (PV planeado vs. EV/AC a la fecha). La vista `DashboardView` la grafica y
+recalcula en vivo al editar los costos.
+
+**Exportadores profesionales** (`backend/app/reporting/exporters.py`), deterministas y sin
+dependencias externas:
+- **MS Project (MSPDI XML)** — con mapeo de dependencias FS/SS/FF/SF y *lag*.
+- **Primavera P6 (XER)** — tablas PROJECT/TASK/TASKPRED.
+- **CSV** — compatible con Excel (ES/EF/holgura/crítica/predecesoras/costo).
+- **PNG** del gráfico (SVG→canvas) e **impresión a PDF** (`window.print()`) desde el cliente.
+
+- Endpoints: `POST /api/v1/reporting/evm`, `/export/csv`, `/export/msproject`, `/export/p6`.
+- Espejos JS (`evm.js`, `exporters.js`) con **paridad exacta**; incluyen la descarga en navegador.
+
+## Recursos y simulación de riesgo (Módulo D)
+
+**Simulación Monte Carlo** (`backend/app/simulation/montecarlo.py`): muestrea las duraciones
+desde distribuciones **Beta-PERT** y corre el CPM miles de veces para estimar la distribución
+de la fecha final, los **percentiles** (P50/P80/P90 → compromisos realistas), la **probabilidad
+de cumplir un plazo**, el **índice de criticidad** de cada tarea (detecta cuellos de botella
+“casi críticos” invisibles a un CPM determinista) y el **impacto presupuestal**. Reproducible
+con `seed`. La vista `SimulationView` incluye el escenario *“¿Qué pasaría si…?”* (p.ej. *las
+lluvias retrasan la fase de campo 15 días*) mostrando el desplazamiento de la distribución y el costo.
+
+**Gestión de recursos** (`backend/app/resources/allocation.py`): posiciona las tareas en su
+inicio temprano (CPM), acumula la carga diaria por recurso (personal/maquinaria) y **detecta la
+sobreasignación** (carga > capacidad), agrupándola en ventanas y generando alertas. La vista
+`ResourceView` permite reasignar tareas y ajustar capacidades para resolver los conflictos.
+
+- Endpoints: `POST /api/v1/simulation/montecarlo`, `POST /api/v1/resources/load`.
+- Espejos JS: `montecarlo.js` (PRNG con semilla; converge a la misma distribución) y
+  `resourceLoad.js` (paridad exacta con el backend).
+- Núcleos puros → verificables con `pytest`.
+
+## Interfaz visual e interactiva (Módulo C)
+
+Tres vistas del mismo proyecto, todas dependency-free (React + SVG + CSS del sistema
+de diseño) con recálculo en el cliente:
+
+- **Diagrama de Red (PERT)** — nodos por capas y aristas de dependencia con etiqueta de tipo/lag.
+- **Gantt dinámico** — barras arrastrables (ajustar duración) que recalculan la ruta al instante.
+- **Kanban de ejecución** — seguimiento diario con **arrastrar y soltar nativo** (HTML5) entre
+  columnas de estado (Por hacer / En progreso / Bloqueada / Completada), control de avance por
+  tarjeta y resaltado del camino crítico.
+
+La cabecera del Kanban muestra la **salud del proyecto** calculada por el núcleo de métricas
+de ejecución (`backend/app/execution/metrics.py`, espejo JS en `frontend/src/lib/execution.js`):
+avance real ponderado por duración, avance del camino crítico, avance planeado a la fecha
+(`as_of_day`), varianza de cronograma y una señal (`on_track` / `at_risk` / `behind`…). Una
+tarea crítica bloqueada eleva la salud al menos a `at_risk`.
+
+- Endpoint: `POST /api/v1/execution/summary`.
+- Núcleo puro (dataclasses) → verificable con `pytest`; paridad Python ↔ JavaScript verificada.
 
 ## El motor CPM/PERT (núcleo)
 
@@ -59,22 +190,78 @@ y el modo offline. Ambos calculan:
 ```bash
 cd backend
 pip install -r requirements.txt
-pytest -v                       # 10/10 pruebas del motor
+ruff check app                  # linting
+pytest -v                       # 104/104 pruebas (cores + persistencia + auth)
 uvicorn app.main:app --reload   # API en http://localhost:8000/docs
 ```
 
+### Integración continua (CI)
+
+GitHub Actions ejecuta en cada push y pull request ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+- **Backend** (Python 3.11 y 3.12): `ruff check`, un *smoke test* que importa `app.main`
+  (valida el cableado de FastAPI) y toda la batería `pytest`.
+- **Frontend**: `npm install`, verificación de formato (Prettier, informativa) y `vite build`.
+
 Endpoints implementados:
+- `POST /api/v1/ai/breakdown` — idea en texto → EDT validada + ruta crítica.
+- `POST /api/v1/ai/transcribe` — nota de voz → texto (interfaz Whisper).
 - `POST /api/v1/cpm/preview` — recálculo sin persistir (Gantt en tiempo real).
-- `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?".
+- `POST /api/v1/execution/summary` — resumen de ejecución/salud para el Kanban.
+- `POST /api/v1/simulation/montecarlo` — análisis de riesgo Monte Carlo.
+- `POST /api/v1/resources/load` — carga de recursos + alertas de sobreasignación.
+- `POST /api/v1/reporting/evm` — dashboard de Valor Ganado (EVM).
+- `POST /api/v1/export/{csv,msproject,p6}` — exportadores profesionales.
+- `POST /api/v1/scenarios/simulate` — modo "¿Qué pasaría si…?" determinista.
+- `POST /api/v1/sync` — sincronización offline (fusión con LWW a nivel de campo).
+- **Autenticación**: `POST /auth/register`, `/auth/login`, `GET /auth/me`, `POST /auth/users` (JWT + RBAC).
+- **Persistencia**: `POST /projects`, `/projects/from-wbs`, `GET/PATCH/DELETE /projects/{id}`,
+  `GET/POST /projects/{id}/tasks`, `PATCH/DELETE /tasks/{id}`, `/projects/{id}/dependencies`,
+  `POST /projects/{id}/cpm/compute`, `GET /projects/{id}/snapshot`, `POST /projects/{id}/sync`.
 - `GET /health`.
+
+Para activar el LLM real:
+```bash
+export CAMPO_LLM_API_KEY=sk-...      # sin esto, usa el heurístico offline
+export CAMPO_LLM_MODEL=gpt-4o-mini   # opcional
+```
 
 ### Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev                     # http://localhost:5173
+npm run dev                     # http://localhost:5173 (proxy /api -> :8000)
 ```
+
+## Despliegue (Docker)
+
+Con **Docker** y **Docker Compose** se levanta todo (frontend + API) con un comando:
+
+```bash
+cp .env.example .env            # define CAMPO_JWT_SECRET (y opcional CAMPO_LLM_API_KEY)
+docker compose up --build
+```
+
+| Servicio | URL | Detalle |
+|---|---|---|
+| Frontend (Nginx) | http://localhost:8080 | Sirve la SPA y hace **proxy de `/api`** al backend (misma-origen, sin CORS). |
+| API (FastAPI) | http://localhost:8000/docs | Swagger UI para probar los endpoints. |
+
+- El backend corre en un contenedor Python 3.12 (`backend/Dockerfile`) con **Uvicorn** y
+  *healthcheck* en `/health`. La base **SQLite** se persiste en el volumen `campo_data`.
+- El frontend se compila con Vite y se sirve con **Nginx** (`frontend/Dockerfile` +
+  `frontend/nginx.conf`), con *fallback* SPA y cacheo de activos.
+- Variables: `CAMPO_JWT_SECRET` (firma de JWT), `CAMPO_DB_PATH`, `CAMPO_LLM_API_KEY` (opcional).
+
+**Despliegue por separado (sin Docker):**
+- *Frontend estático*: `npm run build` → publica `frontend/dist/` en Netlify/Vercel/S3
+  (configura la reescritura SPA a `index.html` y el proxy de `/api` a tu backend).
+- *Backend*: `uvicorn app.main:app --host 0.0.0.0 --port 8000` detrás de un reverse-proxy.
+
+**Escalar a PostgreSQL:** la capa de datos usa SQLite (apta para equipos pequeños). Para alta
+concurrencia, usa los modelos ORM (`backend/app/db/models_orm.py`) sobre PostgreSQL y gestiona
+el esquema con Alembic (ya en `requirements.txt`).
 
 ## Diseño
 

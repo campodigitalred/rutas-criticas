@@ -1,0 +1,16 @@
+# Configuración de despliegue para Netlify.
+# Al conectar este repositorio, Netlify compila y publica el frontend sin ajustes manuales.
+
+[build]
+  base = "frontend"            # el frontend vive en esta carpeta
+  command = "npm run build"    # Netlify instala dependencias y compila con Vite
+  publish = "dist"             # carpeta resultante que se publica
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# La app es de una sola página: cualquier ruta devuelve index.html.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

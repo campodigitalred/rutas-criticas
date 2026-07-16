@@ -120,7 +120,7 @@ Prototipo de referencia: [`frontend/src/components/CriticalPathView.jsx`](../fro
 | Async | Celery + Redis | Simulaciones y exportaciones pesadas. |
 | Base de datos | **PostgreSQL 15** | Integridad relacional, consultas recursivas (CTE) para DAG. |
 | Cache/offline | IndexedDB (web) / SQLite (móvil) | Modo offline limitado. |
-| Auth | OAuth2 + JWT | Roles: consultor, director, aliado. |
+| Auth ✅ | JWT HS256 + PBKDF2 (stdlib) + RBAC | Implementado. Roles: admin, director, consultor, aliado. Ver `backend/app/auth/`. |
 | IA | LLM vía API + Whisper | Desglose EDT y transcripción. |
 
 ---
@@ -148,14 +148,22 @@ Paleta inspirada en el agro y lo digital: verdes profundos, azules digitales, gr
 
 ---
 
-## 6. Estrategia offline
+## 6. Estrategia offline ✅ (implementada)
 
-1. **Lectura offline:** el proyecto activo se cachea en IndexedDB/SQLite al abrirlo.
-2. **Escritura offline:** cambios (avance de tareas, notas de campo) se encolan como *mutations*.
-3. **Sincronización:** al recuperar señal, la cola se envía; el backend resuelve conflictos por
-   *last-write-wins* a nivel de campo + `updated_at`, marcando conflictos para revisión manual.
-4. **Recálculo local:** el motor CPM se compila también a TypeScript (o WASM del core Python) para
+1. **Lectura offline:** el proyecto activo se cachea (snapshot) en IndexedDB/localStorage al abrirlo
+   — `frontend/src/lib/offlineStore.js`.
+2. **Escritura offline:** los cambios (avance/estado de tareas, notas de campo) se encolan como
+   *mutations* con `ts` y `base_ts`; ediciones repetidas del mismo campo se colapsan.
+3. **Sincronización:** al recuperar señal, la cola se envía a `POST /api/v1/sync`; el motor
+   (`backend/app/sync/engine.py`) resuelve conflictos por **last-write-wins a nivel de campo**
+   (conflicto = `server_ts > base_ts`; gana el `ts` mayor) y **marca los conflictos para revisión**
+   (`SyncStatusBar`).
+4. **Recálculo local:** el motor CPM está portado a JavaScript (`frontend/src/lib/cpm.js`) para
    recalcular la ruta sin conexión; el servidor revalida al sincronizar.
+
+> El motor de sincronización tiene **paridad exacta** Python ↔ JavaScript
+> (`backend/app/sync/engine.py` ↔ `frontend/src/lib/sync.js`) y está cubierto por pruebas
+> (`tests/test_sync.py`).
 
 ---
 

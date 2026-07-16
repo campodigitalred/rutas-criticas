@@ -11,6 +11,11 @@
  */
 import React, { useMemo, useRef, useState } from "react";
 import { computeCPM } from "../lib/cpm";
+import KanbanView from "./KanbanView";
+import SimulationView from "./SimulationView";
+import ResourceView from "./ResourceView";
+import DashboardView from "./DashboardView";
+import { useOfflineSync } from "../context/OfflineSyncContext.jsx";
 import "../theme.css";
 
 const DAY_PX = 26; // ancho de un día en el Gantt
@@ -24,6 +29,13 @@ const DEMO_TASKS = [
   { id: "T5", name: "Validación y limpieza de datos", duration: 10 },
   { id: "T6", name: "Informe y entrega", duration: 4 },
 ];
+
+/** Estado/avance por defecto para una tarea que llega sin datos de ejecución. */
+const withExecutionDefaults = (t) => ({
+  status: "todo",
+  progress_pct: 0,
+  ...t,
+});
 
 const DEMO_DEPS = [
   { predecessor: "T1", successor: "T2", dep_type: "FS", lag: 0 },
@@ -210,9 +222,10 @@ export default function CriticalPathView({
   initialTasks = DEMO_TASKS,
   initialDeps = DEMO_DEPS,
 }) {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(() => initialTasks.map(withExecutionDefaults));
   const [deps] = useState(initialDeps);
   const [view, setView] = useState("gantt");
+  const { recordMutation } = useOfflineSync();
 
   // Recálculo memoizado del motor CPM ante cualquier cambio de duración.
   const result = useMemo(() => {
@@ -227,7 +240,36 @@ export default function CriticalPathView({
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, duration } : t)));
   }
 
-  const prob = result.pert_std_dev > 0 ? "≈ calc. PERT" : "determinista";
+  function handleStatusChange(id, status) {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id
+          ? { ...t, status, progress_pct: status === "done" ? 100 : t.progress_pct }
+          : t
+      )
+    );
+    // Encola el cambio para sincronización offline.
+    recordMutation(id, "status", status);
+    if (status === "done") recordMutation(id, "progress_pct", 100);
+  }
+
+  function handleProgressChange(id, progress_pct) {
+    let newStatus = null;
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t;
+        // El avance ajusta el estado de forma coherente.
+        let status = t.status;
+        if (progress_pct >= 100) status = "done";
+        else if (progress_pct > 0 && status === "todo") status = "in_progress";
+        else if (progress_pct < 100 && status === "done") status = "in_progress";
+        newStatus = status !== t.status ? status : null;
+        return { ...t, progress_pct, status };
+      })
+    );
+    recordMutation(id, "progress_pct", progress_pct);
+    if (newStatus) recordMutation(id, "status", newStatus);
+  }
 
   return (
     <div className="cc-app">
@@ -255,17 +297,43 @@ export default function CriticalPathView({
         <button className={`cc-tab ${view === "network" ? "active" : ""}`} onClick={() => setView("network")}>
           Diagrama de Red (PERT)
         </button>
+        <button className={`cc-tab ${view === "kanban" ? "active" : ""}`} onClick={() => setView("kanban")}>
+          Kanban de ejecución
+        </button>
+        <button className={`cc-tab ${view === "simulation" ? "active" : ""}`} onClick={() => setView("simulation")}>
+          Simulación (riesgo)
+        </button>
+        <button className={`cc-tab ${view === "resources" ? "active" : ""}`} onClick={() => setView("resources")}>
+          Recursos
+        </button>
+        <button className={`cc-tab ${view === "dashboard" ? "active" : ""}`} onClick={() => setView("dashboard")}>
+          Dashboard / EVM
+        </button>
       </div>
 
-      <Legend />
+      {(view === "gantt" || view === "network") && <Legend />}
 
       <div className="cc-panel">
         {result.error ? (
           <p style={{ color: "var(--cc-critical)" }}>Error: {result.error}</p>
         ) : view === "gantt" ? (
           <GanttView tasks={tasks} result={result} onDurationChange={handleDurationChange} />
-        ) : (
+        ) : view === "network" ? (
           <NetworkView tasks={tasks} deps={deps} result={result} />
+        ) : view === "kanban" ? (
+          <KanbanView
+            tasks={tasks}
+            deps={deps}
+            result={result}
+            onStatusChange={handleStatusChange}
+            onProgressChange={handleProgressChange}
+          />
+        ) : view === "simulation" ? (
+          <SimulationView tasks={tasks} deps={deps} result={result} />
+        ) : view === "resources" ? (
+          <ResourceView tasks={tasks} deps={deps} />
+        ) : (
+          <DashboardView tasks={tasks} deps={deps} />
         )}
       </div>
     </div>

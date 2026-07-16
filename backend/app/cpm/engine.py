@@ -16,7 +16,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional
 
 DependencyType = str  # "FS" | "SS" | "FF" | "SF"
 VALID_DEP_TYPES = {"FS", "SS", "FF", "SF"}

@@ -14,9 +14,16 @@ dist/
 npm-debug.log*
 yarn-error.log*
 
+# Bases de datos SQLite (persistencia local)
+*.db
+*.db-wal
+*.db-shm
+campo_critico.db*
+
 # Entornos y editores
 .env
 .env.*
+!.env.example
 .DS_Store
 .idea/
 .vscode/

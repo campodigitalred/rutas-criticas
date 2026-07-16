@@ -1,0 +1,41 @@
+# Campo Crítico — orquestación local/producción ligera.
+#
+#   docker compose up --build
+#
+# Frontend (Nginx)  ->  http://localhost:8080
+# API (FastAPI)     ->  http://localhost:8000/docs
+#
+# El frontend habla con el backend por el proxy /api de Nginx (misma-origen).
+# La base de datos SQLite se persiste en el volumen 'campo_data'.
+#
+# Para alta concurrencia, migrar a PostgreSQL usando los modelos ORM
+# (backend/app/db/models_orm.py). Ver la sección "Despliegue" del README.
+
+services:
+  backend:
+    build: ./backend
+    image: campo-critico-backend
+    environment:
+      # Cambia este secreto en producción (firma de los JWT).
+      CAMPO_JWT_SECRET: ${CAMPO_JWT_SECRET:-cambia-esta-clave-en-produccion}
+      CAMPO_DB_PATH: /data/campo_critico.db
+      # Opcional: habilitar el asistente IA con un LLM real.
+      CAMPO_LLM_API_KEY: ${CAMPO_LLM_API_KEY:-}
+      CAMPO_LLM_MODEL: ${CAMPO_LLM_MODEL:-gpt-4o-mini}
+    volumes:
+      - campo_data:/data
+    ports:
+      - "8000:8000"   # expone /docs; puedes quitarlo si solo usas el proxy
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    image: campo-critico-frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  campo_data:
