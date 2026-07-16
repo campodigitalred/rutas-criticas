@@ -231,8 +231,37 @@ export CAMPO_LLM_MODEL=gpt-4o-mini   # opcional
 ```bash
 cd frontend
 npm install
-npm run dev                     # http://localhost:5173
+npm run dev                     # http://localhost:5173 (proxy /api -> :8000)
 ```
+
+## Despliegue (Docker)
+
+Con **Docker** y **Docker Compose** se levanta todo (frontend + API) con un comando:
+
+```bash
+cp .env.example .env            # define CAMPO_JWT_SECRET (y opcional CAMPO_LLM_API_KEY)
+docker compose up --build
+```
+
+| Servicio | URL | Detalle |
+|---|---|---|
+| Frontend (Nginx) | http://localhost:8080 | Sirve la SPA y hace **proxy de `/api`** al backend (misma-origen, sin CORS). |
+| API (FastAPI) | http://localhost:8000/docs | Swagger UI para probar los endpoints. |
+
+- El backend corre en un contenedor Python 3.12 (`backend/Dockerfile`) con **Uvicorn** y
+  *healthcheck* en `/health`. La base **SQLite** se persiste en el volumen `campo_data`.
+- El frontend se compila con Vite y se sirve con **Nginx** (`frontend/Dockerfile` +
+  `frontend/nginx.conf`), con *fallback* SPA y cacheo de activos.
+- Variables: `CAMPO_JWT_SECRET` (firma de JWT), `CAMPO_DB_PATH`, `CAMPO_LLM_API_KEY` (opcional).
+
+**Despliegue por separado (sin Docker):**
+- *Frontend estático*: `npm run build` → publica `frontend/dist/` en Netlify/Vercel/S3
+  (configura la reescritura SPA a `index.html` y el proxy de `/api` a tu backend).
+- *Backend*: `uvicorn app.main:app --host 0.0.0.0 --port 8000` detrás de un reverse-proxy.
+
+**Escalar a PostgreSQL:** la capa de datos usa SQLite (apta para equipos pequeños). Para alta
+concurrencia, usa los modelos ORM (`backend/app/db/models_orm.py`) sobre PostgreSQL y gestiona
+el esquema con Alembic (ya en `requirements.txt`).
 
 ## Diseño
 

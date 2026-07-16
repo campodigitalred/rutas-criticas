@@ -35,7 +35,11 @@ class Database:
 
     def __init__(self, path: str = ":memory:"):
         self.path = path
-        self._conn = sqlite3.connect(path)
+        # ``check_same_thread=False``: uvicorn ejecuta los endpoints síncronos en
+        # un pool de hilos; la conexión (singleton por proceso) debe poder usarse
+        # entre hilos. WAL permite lecturas concurrentes y serializa escrituras.
+        # Para alta concurrencia, migrar a PostgreSQL (ver app/db/models_orm.py).
+        self._conn = sqlite3.connect(path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.execute("PRAGMA foreign_keys = ON")
         self._conn.execute("PRAGMA journal_mode = WAL")

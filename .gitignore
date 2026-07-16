@@ -23,6 +23,7 @@ campo_critico.db*
 # Entornos y editores
 .env
 .env.*
+!.env.example
 .DS_Store
 .idea/
 .vscode/
